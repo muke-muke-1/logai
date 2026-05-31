@@ -36,7 +36,10 @@ pub fn detect_format(first_lines: &[String]) -> Format {
 }
 
 /// Parse a log file. Streams lines, auto-detects format, returns all LogEntries.
-pub fn parse_log_file(path: impl AsRef<Path>) -> anyhow::Result<Vec<LogEntry>> {
+pub fn parse_log_file(
+    path: impl AsRef<Path>,
+    format_override: Option<Format>,
+) -> anyhow::Result<Vec<LogEntry>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let lines: Vec<String> = reader
@@ -44,9 +47,14 @@ pub fn parse_log_file(path: impl AsRef<Path>) -> anyhow::Result<Vec<LogEntry>> {
         .filter_map(|l| l.ok())
         .collect();
 
-    // Detect format from first 10 lines
-    let sample: Vec<String> = lines.iter().take(10).cloned().collect();
-    let format = detect_format(&sample);
+    // Detect format from first 10 lines (or use override)
+    let format = match format_override {
+        Some(f) => f,
+        None => {
+            let sample: Vec<String> = lines.iter().take(10).cloned().collect();
+            detect_format(&sample)
+        }
+    };
 
     match format {
         Format::Json => {

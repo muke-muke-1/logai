@@ -63,6 +63,16 @@ pub enum FormatArg {
     Auto,
 }
 
+impl FormatArg {
+    fn to_format(self) -> Option<crate::types::Format> {
+        match self {
+            FormatArg::Json => Some(crate::types::Format::Json),
+            FormatArg::Text => Some(crate::types::Format::PlainText),
+            FormatArg::Auto => None,
+        }
+    }
+}
+
 #[derive(Clone, ValueEnum)]
 pub enum LevelArg {
     Error,
@@ -108,7 +118,8 @@ pub async fn run() -> anyhow::Result<()> {
             eprintln!("🔍 Parsing {}...", file_path.display());
             let start = Instant::now();
 
-            let entries = parse_log_file(file_path)?;
+            let format_override = args.format.to_format();
+            let entries = parse_log_file(file_path, format_override)?;
             let min_level = args.min_level.to_level();
             let entries: Vec<_> = entries
                 .into_iter()
