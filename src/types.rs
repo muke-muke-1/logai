@@ -26,6 +26,21 @@ impl std::fmt::Display for Level {
     }
 }
 
+impl Level {
+    /// Numeric severity: lower = more severe.
+    /// Error=0, Warn=1, Info=2, Debug=3, Trace=4, Unknown=5
+    pub fn severity(self) -> u8 {
+        match self {
+            Level::Error => 0,
+            Level::Warn => 1,
+            Level::Info => 2,
+            Level::Debug => 3,
+            Level::Trace => 4,
+            Level::Unknown => 5,
+        }
+    }
+}
+
 /// 日志格式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
