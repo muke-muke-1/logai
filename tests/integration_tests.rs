@@ -46,3 +46,31 @@ fn test_analyze_parses_json_log_successfully() {
         .arg(model);
     cmd.assert().success();
 }
+
+#[test]
+fn test_analyze_with_min_level_flag() {
+    let mut cmd = Command::cargo_bin("logai").unwrap();
+    cmd.arg("analyze")
+        .arg("tests/fixtures/json_error.log")
+        .arg("--min-level")
+        .arg("error")
+        .arg("--model")
+        .arg("deepseek");
+    let output = cmd.output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Parsed") || stderr.contains("parse"));
+}
+
+#[test]
+fn test_analyze_with_format_flag() {
+    let mut cmd = Command::cargo_bin("logai").unwrap();
+    cmd.arg("analyze")
+        .arg("tests/fixtures/json_error.log")
+        .arg("--format")
+        .arg("json")
+        .arg("--model")
+        .arg("deepseek");
+    let output = cmd.output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Parsed") || stderr.contains("parse"));
+}
