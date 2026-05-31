@@ -81,3 +81,34 @@ fn test_analyze_with_format_flag() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Parsed") || stderr.contains("parse"));
 }
+
+#[test]
+fn test_watch_help() {
+    let mut cmd = Command::cargo_bin("logai").unwrap();
+    cmd.arg("watch").arg("--help");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("实时监听日志文件"));
+}
+
+#[test]
+fn test_watch_file_not_found() {
+    let mut cmd = Command::cargo_bin("logai").unwrap();
+    cmd.arg("watch").arg("nonexistent_watch.log");
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("文件不存在"));
+}
+
+#[test]
+fn test_watch_shows_flags_in_help() {
+    let mut cmd = Command::cargo_bin("logai").unwrap();
+    cmd.arg("watch").arg("--help");
+    let output = cmd.output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--window"));
+    assert!(stdout.contains("--max-initial-lines"));
+    assert!(stdout.contains("--model"));
+    assert!(stdout.contains("--min-level"));
+    assert!(stdout.contains("--format"));
+}
