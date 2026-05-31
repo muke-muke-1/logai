@@ -71,6 +71,17 @@ pub enum LevelArg {
     Debug,
 }
 
+impl LevelArg {
+    fn to_level(self) -> crate::types::Level {
+        match self {
+            LevelArg::Error => crate::types::Level::Error,
+            LevelArg::Warn => crate::types::Level::Warn,
+            LevelArg::Info => crate::types::Level::Info,
+            LevelArg::Debug => crate::types::Level::Debug,
+        }
+    }
+}
+
 impl From<ModelArg> for Model {
     fn from(arg: ModelArg) -> Self {
         match arg {
@@ -98,7 +109,15 @@ pub async fn run() -> anyhow::Result<()> {
             let start = Instant::now();
 
             let entries = parse_log_file(file_path)?;
-            eprintln!("   Parsed {} log entries", entries.len());
+            let min_level = args.min_level.to_level();
+            let entries: Vec<_> = entries
+                .into_iter()
+                .filter(|e| {
+                    let level = e.level.unwrap_or(crate::types::Level::Unknown);
+                    level.severity() <= min_level.severity()
+                })
+                .collect();
+            eprintln!("   Parsed {} log entries (after --min-level filter)", entries.len());
 
             let summary = aggregate(&entries);
             eprintln!(
