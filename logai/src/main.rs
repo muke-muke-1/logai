@@ -5,6 +5,10 @@ pub mod ai;
 pub mod renderer;
 pub mod cli;
 
-fn main() {
-    println!("Hello, world!");
+#[tokio::main]
+async fn main() {
+    if let Err(e) = cli::run().await {
+        eprintln!("❌ Error: {}", e);
+        std::process::exit(1);
+    }
 }
