@@ -137,13 +137,13 @@ pub async fn run() -> anyhow::Result<()> {
                 summary.anomalies.len()
             );
 
-            let backend = create_backend(model, deep)?;
+            let backend = create_backend(model, deep).await?;
             eprintln!(
                 "🤖 Analyzing with {} ({})...",
                 backend.model_name(),
                 backend.actual_model(deep)
             );
-            let response = backend.analyze(&summary).await?;
+            let response = crate::ai::with_retry(|| backend.analyze(&summary)).await?;
 
             let elapsed = start.elapsed().as_secs_f64();
             render_report(&summary, &response, elapsed, backend.model_name());

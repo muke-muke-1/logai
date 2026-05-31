@@ -15,8 +15,24 @@ pub trait AiBackend: Send + Sync {
     fn actual_model(&self, deep: bool) -> &str;
 }
 
+/// Retry an async operation once with a 1-second delay on failure.
+pub async fn with_retry<T, F, Fut>(f: F) -> anyhow::Result<T>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = anyhow::Result<T>>,
+{
+    match f().await {
+        Ok(val) => Ok(val),
+        Err(e) => {
+            eprintln!("   ⚠️  First attempt failed: {}. Retrying in 1s...", e);
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            f().await
+        }
+    }
+}
+
 /// Create the appropriate backend based on Model enum
-pub fn create_backend(model: Model, deep: bool) -> anyhow::Result<Box<dyn AiBackend>> {
+pub async fn create_backend(model: Model, deep: bool) -> anyhow::Result<Box<dyn AiBackend>> {
     match model {
         Model::Claude => {
             let api_key = env::var("ANTHROPIC_API_KEY").map_err(|_| {
@@ -40,33 +56,34 @@ pub fn create_backend(model: Model, deep: bool) -> anyhow::Result<Box<dyn AiBack
             let host = env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".to_string());
             Ok(Box::new(ollama::OllamaBackend::new(host, deep)))
         }
-        Model::Auto => auto_detect(deep),
+        Model::Auto => Box::pin(auto_detect(deep)).await,
     }
 }
 
 /// Auto-detect available backend by checking env vars, priority: Claude > OpenAI > DeepSeek > Ollama
-fn auto_detect(deep: bool) -> anyhow::Result<Box<dyn AiBackend>> {
-    if env::var("ANTHROPIC_API_KEY").is_ok() {
+async fn auto_detect(deep: bool) -> anyhow::Result<Box<dyn AiBackend>> {
+    if std::env::var("ANTHROPIC_API_KEY").is_ok() {
         eprintln!("Auto-detected: Claude (ANTHROPIC_API_KEY)");
-        return create_backend(Model::Claude, deep);
+        return create_backend(Model::Claude, deep).await;
     }
-    if env::var("OPENAI_API_KEY").is_ok() {
+    if std::env::var("OPENAI_API_KEY").is_ok() {
         eprintln!("Auto-detected: OpenAI (OPENAI_API_KEY)");
-        return create_backend(Model::OpenAI, deep);
+        return create_backend(Model::OpenAI, deep).await;
     }
-    if env::var("DEEPSEEK_API_KEY").is_ok() {
+    if std::env::var("DEEPSEEK_API_KEY").is_ok() {
         eprintln!("Auto-detected: DeepSeek (DEEPSEEK_API_KEY)");
-        return create_backend(Model::DeepSeek, deep);
+        return create_backend(Model::DeepSeek, deep).await;
     }
-    // Try Ollama as last resort
-    let host = env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".to_string());
-    let client = reqwest::blocking::Client::builder()
+    // Try Ollama as last resort (async probe)
+    let host = std::env::var("OLLAMA_HOST")
+        .unwrap_or_else(|_| "http://localhost:11434".to_string());
+    let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(2))
         .build()
         .unwrap_or_default();
-    if client.get(&host).send().is_ok() {
+    if client.get(&host).send().await.is_ok() {
         eprintln!("Auto-detected: Ollama ({})", host);
-        return create_backend(Model::Ollama, deep);
+        return create_backend(Model::Ollama, deep).await;
     }
     Err(anyhow::anyhow!(
         "No AI backend available. Set one of:\n  \
