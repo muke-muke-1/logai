@@ -44,10 +44,15 @@ pub struct AnalyzeArgs {
 
 #[derive(Clone, ValueEnum)]
 pub enum ModelArg {
+    #[value(name = "claude")]
     Claude,
+    #[value(name = "openai")]
     OpenAI,
+    #[value(name = "deepseek")]
     DeepSeek,
+    #[value(name = "ollama")]
     Ollama,
+    #[value(name = "auto")]
     Auto,
 }
 
