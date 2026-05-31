@@ -38,13 +38,15 @@ pub fn build_signature(message: &str) -> String {
 /// Group LogEntries by their deparameterized error signature.
 /// Returns Vec of (signature, Vec of entry indices), sorted by group size descending.
 pub fn group_by_signature(entries: &[LogEntry]) -> Vec<(String, Vec<usize>)> {
+    let mut sig_to_idx: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     let mut groups: Vec<(String, Vec<usize>)> = Vec::new();
 
     for (i, entry) in entries.iter().enumerate() {
         let sig = build_signature(&entry.message);
-        if let Some(group) = groups.iter_mut().find(|(s, _)| *s == sig) {
-            group.1.push(i);
+        if let Some(&idx) = sig_to_idx.get(&sig) {
+            groups[idx].1.push(i);
         } else {
+            sig_to_idx.insert(sig.clone(), groups.len());
             groups.push((sig, vec![i]));
         }
     }
