@@ -50,6 +50,83 @@ pub fn is_new_error(
     }
 }
 
+/// Detect SilentRecovery: error group appeared in first half of windows
+/// but has zero occurrences in the most recent 2 windows.
+pub fn detect_silent_recovery(
+    window_counts: &[WindowCount],
+    group_index: usize,
+) -> Vec<Anomaly> {
+    if window_counts.len() < 4 {
+        return vec![];
+    }
+
+    let mid = window_counts.len() / 2;
+    let appeared_early = window_counts[..mid].iter().any(|(_, c)| *c > 0);
+    let silent_recently = window_counts[window_counts.len() - 2..]
+        .iter()
+        .all(|(_, c)| *c == 0);
+
+    if appeared_early && silent_recently {
+        vec![Anomaly::SilentRecovery { group_index }]
+    } else {
+        vec![]
+    }
+}
+
+/// Detect PeriodicPattern: error group appears at regular intervals.
+/// Standard deviation < 30% of mean interval → periodic.
+/// Requires ≥3 appearances across windows.
+pub fn detect_periodic_pattern(
+    window_counts: &[WindowCount],
+    group_index: usize,
+) -> Vec<Anomaly> {
+    if window_counts.len() < 3 {
+        return vec![];
+    }
+
+    let appearances: Vec<i64> = window_counts
+        .iter()
+        .filter(|(_, c)| *c > 0)
+        .map(|(t, _)| t.timestamp())
+        .collect();
+
+    if appearances.len() < 3 {
+        return vec![];
+    }
+
+    let intervals: Vec<f64> = appearances
+        .windows(2)
+        .map(|w| (w[1] - w[0]) as f64)
+        .collect();
+
+    if intervals.is_empty() {
+        return vec![];
+    }
+
+    let mean = intervals.iter().sum::<f64>() / intervals.len() as f64;
+    if mean < 60.0 {
+        return vec![];
+    }
+
+    let variance = intervals
+        .iter()
+        .map(|&x| (x - mean) * (x - mean))
+        .sum::<f64>()
+        / intervals.len() as f64;
+    let std_dev = variance.sqrt();
+    let cv = std_dev / mean;
+
+    if cv < 0.3 {
+        let period_minutes = (mean / 60.0) as u32;
+        vec![Anomaly::PeriodicPattern {
+            group_index,
+            period_minutes: period_minutes.max(1),
+        }]
+    } else {
+        vec![]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

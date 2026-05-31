@@ -59,17 +59,38 @@ pub fn aggregate(entries: &[LogEntry]) -> AnalysisSummary {
             bucketer::bucket_by_time(&timestamps_for_group, bucketer::DEFAULT_WINDOW_SECS);
         let trend = bucketer::compute_trend(&window_counts);
 
-        // Anomaly detection
-        let window_data: Vec<(chrono::DateTime<chrono::Utc>, usize)> = indices
-            .iter()
-            .filter_map(|&i| entries[i].timestamp.map(|t| (t, 1usize)))
-            .collect();
-        let mut anomalies = anomaly::detect_anomalies(&window_data, group_idx);
+        // Build windowed counts for anomaly detection (reuse bucketed data)
+        // FIX: previously passed per-event (timestamp,1) pairs to spike detector,
+        // which meant spike detection never actually worked in production.
+        // Now uses proper windowed counts from bucketer.
+        let anomaly_windows: Vec<(chrono::DateTime<chrono::Utc>, usize)> = {
+            let ref_ts = time_start.unwrap_or_else(|| {
+                chrono::DateTime::from_timestamp(0, 0).unwrap()
+            });
+            window_counts
+                .iter()
+                .enumerate()
+                .map(|(i, &c)| {
+                    let ts = ref_ts + chrono::Duration::seconds(
+                        (i as i64) * bucketer::DEFAULT_WINDOW_SECS
+                    );
+                    (ts, c)
+                })
+                .collect()
+        };
+
+        let mut anomalies = anomaly::detect_anomalies(&anomaly_windows, group_idx);
 
         // New error check
         if anomaly::is_new_error(first_seen, time_start) {
             anomalies.push(Anomaly::NewError { group_index: group_idx });
         }
+
+        // SilentRecovery check
+        anomalies.extend(anomaly::detect_silent_recovery(&anomaly_windows, group_idx));
+
+        // PeriodicPattern check
+        anomalies.extend(anomaly::detect_periodic_pattern(&anomaly_windows, group_idx));
 
         all_anomalies.extend(anomalies);
 
