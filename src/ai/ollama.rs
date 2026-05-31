@@ -11,7 +11,11 @@ pub struct OllamaBackend {
 
 impl OllamaBackend {
     pub fn new(host: String, deep: bool) -> Self {
-        Self { host, deep, client: reqwest::Client::new() }
+        Self {
+            host,
+            deep,
+            client: reqwest::Client::new(),
+        }
     }
 }
 
@@ -28,7 +32,8 @@ impl AiBackend for OllamaBackend {
             "format": "json"
         });
 
-        let resp = self.client
+        let resp = self
+            .client
             .post(format!("{}/api/generate", self.host))
             .json(&body)
             .timeout(std::time::Duration::from_secs(60))
@@ -40,7 +45,8 @@ impl AiBackend for OllamaBackend {
             anyhow::bail!(
                 "Ollama error ({}). Is Ollama running? Run: ollama serve\n\
                  Make sure you have pulled the model: ollama pull {}",
-                status, model
+                status,
+                model
             );
         }
 
@@ -49,8 +55,14 @@ impl AiBackend for OllamaBackend {
         parse_ai_response(&response_text)
     }
 
-    fn model_name(&self) -> &str { "Ollama" }
+    fn model_name(&self) -> &str {
+        "Ollama"
+    }
     fn actual_model(&self, deep: bool) -> &str {
-        if deep { "llama3.2" } else { "llama3.2" }
+        if deep {
+            "llama3.2:latest"
+        } else {
+            "llama3.2"
+        }
     }
 }

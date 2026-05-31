@@ -31,13 +31,20 @@ fn test_analyze_file_not_found() {
 #[test]
 fn test_analyze_parses_json_log_successfully() {
     // This test requires an API key — skip if none configured
-    if std::env::var("DEEPSEEK_API_KEY").is_err() && std::env::var("OPENAI_API_KEY").is_err() && std::env::var("ANTHROPIC_API_KEY").is_err() {
+    if std::env::var("DEEPSEEK_API_KEY").is_err()
+        && std::env::var("OPENAI_API_KEY").is_err()
+        && std::env::var("ANTHROPIC_API_KEY").is_err()
+    {
         eprintln!("Skipping: no AI API key configured");
         return;
     }
-    let model = if std::env::var("DEEPSEEK_API_KEY").is_ok() { "deepseek" }
-        else if std::env::var("OPENAI_API_KEY").is_ok() { "openai" }
-        else { "claude" };
+    let model = if std::env::var("DEEPSEEK_API_KEY").is_ok() {
+        "deepseek"
+    } else if std::env::var("OPENAI_API_KEY").is_ok() {
+        "openai"
+    } else {
+        "claude"
+    };
 
     let mut cmd = Command::cargo_bin("logai").unwrap();
     cmd.arg("analyze")

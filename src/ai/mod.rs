@@ -36,7 +36,9 @@ pub async fn create_backend(model: Model, deep: bool) -> anyhow::Result<Box<dyn 
     match model {
         Model::Claude => {
             let api_key = env::var("ANTHROPIC_API_KEY").map_err(|_| {
-                anyhow::anyhow!("ANTHROPIC_API_KEY not set. Set it with: export ANTHROPIC_API_KEY=sk-ant-...")
+                anyhow::anyhow!(
+                    "ANTHROPIC_API_KEY not set. Set it with: export ANTHROPIC_API_KEY=sk-ant-..."
+                )
             })?;
             Ok(Box::new(claude::ClaudeBackend::new(api_key, deep)))
         }
@@ -48,12 +50,15 @@ pub async fn create_backend(model: Model, deep: bool) -> anyhow::Result<Box<dyn 
         }
         Model::DeepSeek => {
             let api_key = env::var("DEEPSEEK_API_KEY").map_err(|_| {
-                anyhow::anyhow!("DEEPSEEK_API_KEY not set. Set it with: export DEEPSEEK_API_KEY=sk-...")
+                anyhow::anyhow!(
+                    "DEEPSEEK_API_KEY not set. Set it with: export DEEPSEEK_API_KEY=sk-..."
+                )
             })?;
             Ok(Box::new(deepseek::DeepSeekBackend::new(api_key, deep)))
         }
         Model::Ollama => {
-            let host = env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".to_string());
+            let host =
+                env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".to_string());
             Ok(Box::new(ollama::OllamaBackend::new(host, deep)))
         }
         Model::Auto => Box::pin(auto_detect(deep)).await,
@@ -75,8 +80,8 @@ async fn auto_detect(deep: bool) -> anyhow::Result<Box<dyn AiBackend>> {
         return create_backend(Model::DeepSeek, deep).await;
     }
     // Try Ollama as last resort (async probe)
-    let host = std::env::var("OLLAMA_HOST")
-        .unwrap_or_else(|_| "http://localhost:11434".to_string());
+    let host =
+        std::env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".to_string());
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(2))
         .build()
@@ -112,7 +117,10 @@ pub fn parse_ai_response(text: &str) -> anyhow::Result<AiResponse> {
     // Graceful fallback
     Ok(AiResponse {
         root_causes: vec![crate::types::RootCause {
-            description: format!("AI response parsing failed. Raw response:\n{}", &text[..text.len().min(500)]),
+            description: format!(
+                "AI response parsing failed. Raw response:\n{}",
+                &text[..text.len().min(500)]
+            ),
             evidence: vec![],
             severity: crate::types::Severity::Medium,
         }],

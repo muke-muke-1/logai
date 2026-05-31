@@ -11,8 +11,8 @@ pub fn compute_trend(window_counts: &[usize]) -> Trend {
 
     let mid = window_counts.len() / 2;
     let first_half_avg: f64 = window_counts[..mid].iter().sum::<usize>() as f64 / mid as f64;
-    let second_half_avg: f64 = window_counts[mid..].iter().sum::<usize>() as f64
-        / (window_counts.len() - mid) as f64;
+    let second_half_avg: f64 =
+        window_counts[mid..].iter().sum::<usize>() as f64 / (window_counts.len() - mid) as f64;
 
     let threshold = 0.2; // 20% change is significant
     if second_half_avg > first_half_avg * (1.0 + threshold) {
@@ -47,7 +47,7 @@ pub fn bucket_by_time(
     }
 
     let num_windows = ((total_span as f64) / (window_secs as f64)).ceil() as usize;
-    let num_windows = num_windows.max(1).min(100);
+    let num_windows = num_windows.clamp(1, 100);
 
     let mut buckets = vec![0usize; num_windows];
     for ts in &valid {

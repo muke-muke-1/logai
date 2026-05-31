@@ -7,9 +7,18 @@ static DEPARAM_RULES: LazyLock<Vec<(Regex, &str)>> = LazyLock::new(|| {
         // URL (must come before IP and path)
         (Regex::new(r"https?://\S+").unwrap(), "<URL>"),
         // UUID
-        (Regex::new(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}").unwrap(), "<ID>"),
+        (
+            Regex::new(
+                r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+            )
+            .unwrap(),
+            "<ID>",
+        ),
         // IPv4 address
-        (Regex::new(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}").unwrap(), "<IP>"),
+        (
+            Regex::new(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}").unwrap(),
+            "<IP>",
+        ),
         // Port number (must be after IP)
         (Regex::new(r":\d{4,5}").unwrap(), ":<PORT>"),
         // Hex strings (memory addresses, SHA hashes)

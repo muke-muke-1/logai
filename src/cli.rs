@@ -1,5 +1,5 @@
-use crate::ai::create_backend;
 use crate::aggregator::aggregate;
+use crate::ai::create_backend;
 use crate::parser::parse_log_file;
 use crate::renderer::render_report;
 use crate::types::Model;
@@ -64,7 +64,7 @@ pub enum FormatArg {
 }
 
 impl FormatArg {
-    fn to_format(self) -> Option<crate::types::Format> {
+    fn to_format(&self) -> Option<crate::types::Format> {
         match self {
             FormatArg::Json => Some(crate::types::Format::Json),
             FormatArg::Text => Some(crate::types::Format::PlainText),
@@ -82,7 +82,7 @@ pub enum LevelArg {
 }
 
 impl LevelArg {
-    fn to_level(self) -> crate::types::Level {
+    fn to_level(&self) -> crate::types::Level {
         match self {
             LevelArg::Error => crate::types::Level::Error,
             LevelArg::Warn => crate::types::Level::Warn,
@@ -128,7 +128,10 @@ pub async fn run() -> anyhow::Result<()> {
                     level.severity() <= min_level.severity()
                 })
                 .collect();
-            eprintln!("   Parsed {} log entries (after --min-level filter)", entries.len());
+            eprintln!(
+                "   Parsed {} log entries (after --min-level filter)",
+                entries.len()
+            );
 
             let summary = aggregate(&entries);
             eprintln!(

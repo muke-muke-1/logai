@@ -55,9 +55,10 @@ pub fn parse_timestamp(s: &str) -> Option<DateTime<Utc>> {
     }
     // Syslog: Mon DD HH:MM:SS — use current system year
     let current_year = chrono::Local::now().year();
-    if let Ok(dt) =
-        NaiveDateTime::parse_from_str(&format!("{} {}", current_year, cleaned), "%Y %b %d %H:%M:%S")
-    {
+    if let Ok(dt) = NaiveDateTime::parse_from_str(
+        &format!("{} {}", current_year, cleaned),
+        "%Y %b %d %H:%M:%S",
+    ) {
         return Some(DateTime::from_naive_utc_and_offset(dt, Utc));
     }
     // Unix timestamp (10 digits)

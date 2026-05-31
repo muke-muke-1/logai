@@ -9,7 +9,6 @@ use std::path::Path;
 
 /// Detect log format from the first N lines.
 /// - >=80% valid JSON → Json
-/// - >=50% timestamp matches → PlainText
 /// - Otherwise → PlainText (fallback)
 pub fn detect_format(first_lines: &[String]) -> Format {
     if first_lines.is_empty() {
@@ -20,16 +19,10 @@ pub fn detect_format(first_lines: &[String]) -> Format {
         .iter()
         .filter(|line| serde_json::from_str::<serde_json::Value>(line).is_ok())
         .count();
-    let timestamp_count = first_lines
-        .iter()
-        .filter(|line| timestamp::detect_timestamp(line))
-        .count();
 
     let total = first_lines.len();
     if json_count as f64 / total as f64 >= 0.8 {
         Format::Json
-    } else if timestamp_count as f64 / total as f64 >= 0.5 {
-        Format::PlainText
     } else {
         Format::PlainText
     }
@@ -42,10 +35,7 @@ pub fn parse_log_file(
 ) -> anyhow::Result<Vec<LogEntry>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
-    let lines: Vec<String> = reader
-        .lines()
-        .filter_map(|l| l.ok())
-        .collect();
+    let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
     // Detect format from first 10 lines (or use override)
     let format = match format_override {
@@ -65,8 +55,6 @@ pub fn parse_log_file(
                 .collect();
             Ok(entries)
         }
-        Format::PlainText => {
-            Ok(plain_text::parse_plain_text_iter(lines.into_iter()))
-        }
+        Format::PlainText => Ok(plain_text::parse_plain_text_iter(lines.into_iter())),
     }
 }

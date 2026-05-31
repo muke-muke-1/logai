@@ -3,7 +3,8 @@ use crate::types::{AnalysisSummary, Anomaly, Level};
 pub fn build_analysis_prompt(summary: &AnalysisSummary) -> String {
     let mut prompt = String::new();
 
-    prompt.push_str("你是一个专业的日志分析工程师。请分析以下日志摘要，找出根因并提供修复建议。\n\n");
+    prompt
+        .push_str("你是一个专业的日志分析工程师。请分析以下日志摘要，找出根因并提供修复建议。\n\n");
 
     // Overview
     prompt.push_str("## 概览\n");
@@ -20,7 +21,11 @@ pub fn build_analysis_prompt(summary: &AnalysisSummary) -> String {
     let total = summary.total_lines.max(1) as f64;
     let error_count = summary.level_distribution.get(&Level::Error).unwrap_or(&0);
     let _warn_count = summary.level_distribution.get(&Level::Warn).unwrap_or(&0);
-    prompt.push_str(&format!("- 错误率: {:.1}% ({} 条)\n", *error_count as f64 / total * 100.0, error_count));
+    prompt.push_str(&format!(
+        "- 错误率: {:.1}% ({} 条)\n",
+        *error_count as f64 / total * 100.0,
+        error_count
+    ));
     prompt.push_str(&format!(
         "- 日志级别分布: ERROR {}, WARN {}, INFO {}, DEBUG {}, TRACE {}, UNKNOWN {}\n",
         summary.level_distribution.get(&Level::Error).unwrap_or(&0),
@@ -28,7 +33,10 @@ pub fn build_analysis_prompt(summary: &AnalysisSummary) -> String {
         summary.level_distribution.get(&Level::Info).unwrap_or(&0),
         summary.level_distribution.get(&Level::Debug).unwrap_or(&0),
         summary.level_distribution.get(&Level::Trace).unwrap_or(&0),
-        summary.level_distribution.get(&Level::Unknown).unwrap_or(&0),
+        summary
+            .level_distribution
+            .get(&Level::Unknown)
+            .unwrap_or(&0),
     ));
 
     // Top errors
@@ -62,8 +70,15 @@ pub fn build_analysis_prompt(summary: &AnalysisSummary) -> String {
         prompt.push_str("\n## 检测到的异常\n");
         for anomaly in &summary.anomalies {
             match anomaly {
-                Anomaly::Spike { group_index, multiplier } => {
-                    prompt.push_str(&format!("⚠️ 错误组 {}: 频次突增 {:.1} 倍\n", group_index + 1, multiplier));
+                Anomaly::Spike {
+                    group_index,
+                    multiplier,
+                } => {
+                    prompt.push_str(&format!(
+                        "⚠️ 错误组 {}: 频次突增 {:.1} 倍\n",
+                        group_index + 1,
+                        multiplier
+                    ));
                 }
                 Anomaly::NewError { group_index } => {
                     prompt.push_str(&format!("🆕 错误组 {}: 新出现的错误\n", group_index + 1));
@@ -74,7 +89,10 @@ pub fn build_analysis_prompt(summary: &AnalysisSummary) -> String {
                         group_index + 1
                     ));
                 }
-                Anomaly::PeriodicPattern { group_index, period_minutes } => {
+                Anomaly::PeriodicPattern {
+                    group_index,
+                    period_minutes,
+                } => {
                     prompt.push_str(&format!(
                         "🔁 错误组 {}: 周期性出现，约每 {} 分钟一次。请分析可能的定时任务、cron job、心跳检测或周期性触发器。\n",
                         group_index + 1, period_minutes
@@ -85,7 +103,8 @@ pub fn build_analysis_prompt(summary: &AnalysisSummary) -> String {
     }
 
     prompt.push_str("\n\n请以 JSON 格式回复，不要带 markdown 标记，只返回纯 JSON。格式如下：\n");
-    prompt.push_str(r#"{
+    prompt.push_str(
+        r#"{
   "root_causes": [
     {
       "description": "根因描述",
@@ -102,7 +121,8 @@ pub fn build_analysis_prompt(summary: &AnalysisSummary) -> String {
     }
   ],
   "confidence": 0.85
-}"#);
+}"#,
+    );
 
     prompt
 }

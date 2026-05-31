@@ -4,8 +4,10 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 static LEVEL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\b(error|err|fatal|panic|critical|warn|warning|info|information|debug|trace)\b")
-        .unwrap()
+    Regex::new(
+        r"(?i)\b(error|err|fatal|panic|critical|warn|warning|info|information|debug|trace)\b",
+    )
+    .unwrap()
 });
 
 /// Parse plain text log lines from an iterator (streaming-friendly).

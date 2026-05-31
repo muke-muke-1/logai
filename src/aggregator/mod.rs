@@ -31,14 +31,8 @@ pub fn aggregate(entries: &[LogEntry]) -> AnalysisSummary {
     for (group_idx, (sig, indices)) in groups.iter().enumerate() {
         let count = indices.len();
 
-        let first_seen = indices
-            .iter()
-            .filter_map(|&i| entries[i].timestamp)
-            .min();
-        let last_seen = indices
-            .iter()
-            .filter_map(|&i| entries[i].timestamp)
-            .max();
+        let first_seen = indices.iter().filter_map(|&i| entries[i].timestamp).min();
+        let last_seen = indices.iter().filter_map(|&i| entries[i].timestamp).max();
 
         // Up to 3 raw samples (clones are necessary — summary outlives entries)
         let samples: Vec<String> = indices
@@ -48,9 +42,7 @@ pub fn aggregate(entries: &[LogEntry]) -> AnalysisSummary {
             .collect();
 
         // Representative stack trace
-        let stack_trace = indices
-            .iter()
-            .find_map(|&i| entries[i].stack_trace.clone());
+        let stack_trace = indices.iter().find_map(|&i| entries[i].stack_trace.clone());
 
         // Trend from time-based bucketing
         let timestamps_for_group: Vec<Option<chrono::DateTime<chrono::Utc>>> =
@@ -64,16 +56,13 @@ pub fn aggregate(entries: &[LogEntry]) -> AnalysisSummary {
         // which meant spike detection never actually worked in production.
         // Now uses proper windowed counts from bucketer.
         let anomaly_windows: Vec<(chrono::DateTime<chrono::Utc>, usize)> = {
-            let ref_ts = first_seen.unwrap_or_else(|| {
-                chrono::DateTime::UNIX_EPOCH
-            });
+            let ref_ts = first_seen.unwrap_or(chrono::DateTime::UNIX_EPOCH);
             window_counts
                 .iter()
                 .enumerate()
                 .map(|(i, &c)| {
-                    let ts = ref_ts + chrono::Duration::seconds(
-                        (i as i64) * bucketer::DEFAULT_WINDOW_SECS
-                    );
+                    let ts = ref_ts
+                        + chrono::Duration::seconds((i as i64) * bucketer::DEFAULT_WINDOW_SECS);
                     (ts, c)
                 })
                 .collect()
@@ -83,14 +72,19 @@ pub fn aggregate(entries: &[LogEntry]) -> AnalysisSummary {
 
         // New error check
         if anomaly::is_new_error(first_seen, time_start) {
-            anomalies.push(Anomaly::NewError { group_index: group_idx });
+            anomalies.push(Anomaly::NewError {
+                group_index: group_idx,
+            });
         }
 
         // SilentRecovery check
         anomalies.extend(anomaly::detect_silent_recovery(&anomaly_windows, group_idx));
 
         // PeriodicPattern check
-        anomalies.extend(anomaly::detect_periodic_pattern(&anomaly_windows, group_idx));
+        anomalies.extend(anomaly::detect_periodic_pattern(
+            &anomaly_windows,
+            group_idx,
+        ));
 
         all_anomalies.extend(anomalies);
 

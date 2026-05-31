@@ -11,7 +11,11 @@ pub struct DeepSeekBackend {
 
 impl DeepSeekBackend {
     pub fn new(api_key: String, deep: bool) -> Self {
-        Self { api_key, deep, client: reqwest::Client::new() }
+        Self {
+            api_key,
+            deep,
+            client: reqwest::Client::new(),
+        }
     }
 }
 
@@ -30,7 +34,8 @@ impl AiBackend for DeepSeekBackend {
             "temperature": 0.3
         });
 
-        let resp = self.client
+        let resp = self
+            .client
             .post("https://api.deepseek.com/v1/chat/completions")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&body)
@@ -45,12 +50,21 @@ impl AiBackend for DeepSeekBackend {
         }
 
         let json: serde_json::Value = resp.json().await?;
-        let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string();
+        let content = json["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         parse_ai_response(&content)
     }
 
-    fn model_name(&self) -> &str { "DeepSeek" }
+    fn model_name(&self) -> &str {
+        "DeepSeek"
+    }
     fn actual_model(&self, deep: bool) -> &str {
-        if deep { "deepseek-reasoner" } else { "deepseek-chat" }
+        if deep {
+            "deepseek-reasoner"
+        } else {
+            "deepseek-chat"
+        }
     }
 }

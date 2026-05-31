@@ -11,7 +11,11 @@ pub struct ClaudeBackend {
 
 impl ClaudeBackend {
     pub fn new(api_key: String, deep: bool) -> Self {
-        Self { api_key, deep, client: reqwest::Client::new() }
+        Self {
+            api_key,
+            deep,
+            client: reqwest::Client::new(),
+        }
     }
 }
 
@@ -27,7 +31,8 @@ impl AiBackend for ClaudeBackend {
             "messages": [{"role": "user", "content": prompt}]
         });
 
-        let resp = self.client
+        let resp = self
+            .client
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -43,13 +48,22 @@ impl AiBackend for ClaudeBackend {
         }
 
         let json: serde_json::Value = resp.json().await?;
-        let content = json["content"][0]["text"].as_str().unwrap_or("").to_string();
+        let content = json["content"][0]["text"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
         parse_ai_response(&content)
     }
 
-    fn model_name(&self) -> &str { "Claude" }
+    fn model_name(&self) -> &str {
+        "Claude"
+    }
 
     fn actual_model(&self, deep: bool) -> &str {
-        if deep { "claude-opus-4-8" } else { "claude-haiku-4-5-20251001" }
+        if deep {
+            "claude-opus-4-8"
+        } else {
+            "claude-haiku-4-5-20251001"
+        }
     }
 }

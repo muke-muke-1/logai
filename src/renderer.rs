@@ -166,8 +166,11 @@ fn print_fix_suggestions(suggestions: &[FixSuggestion]) {
 fn print_footer(elapsed: f64, model_name: &str) {
     println!(
         "{}",
-        format!("总耗时 {:.1}s | AI: {} | 日志数据未上传", elapsed, model_name)
-            .with(Color::DarkGrey)
+        format!(
+            "总耗时 {:.1}s | AI: {} | 日志数据未上传",
+            elapsed, model_name
+        )
+        .with(Color::DarkGrey)
     );
     println!();
 }

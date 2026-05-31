@@ -52,10 +52,7 @@ pub fn is_new_error(
 
 /// Detect SilentRecovery: error group appeared in first half of windows
 /// but has zero occurrences in the most recent 2 windows.
-pub fn detect_silent_recovery(
-    window_counts: &[WindowCount],
-    group_index: usize,
-) -> Vec<Anomaly> {
+pub fn detect_silent_recovery(window_counts: &[WindowCount], group_index: usize) -> Vec<Anomaly> {
     if window_counts.len() < 4 {
         return vec![];
     }
@@ -76,10 +73,7 @@ pub fn detect_silent_recovery(
 /// Detect PeriodicPattern: error group appears at regular intervals.
 /// Standard deviation < 30% of mean interval → periodic.
 /// Requires ≥3 appearances across windows.
-pub fn detect_periodic_pattern(
-    window_counts: &[WindowCount],
-    group_index: usize,
-) -> Vec<Anomaly> {
+pub fn detect_periodic_pattern(window_counts: &[WindowCount], group_index: usize) -> Vec<Anomaly> {
     if window_counts.len() < 3 {
         return vec![];
     }
