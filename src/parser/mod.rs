@@ -28,6 +28,20 @@ pub fn detect_format(first_lines: &[String]) -> Format {
     }
 }
 
+/// 按指定格式解析一批日志行（供 watch 模式增量解析使用）
+pub fn parse_lines(lines: &[String], format: Format) -> Vec<LogEntry> {
+    match format {
+        Format::Json => lines
+            .iter()
+            .enumerate()
+            .filter_map(|(i, line)| json::parse_json_line(line, i + 1))
+            .collect(),
+        Format::PlainText => {
+            plain_text::parse_plain_text_iter(lines.to_vec().into_iter())
+        }
+    }
+}
+
 /// Parse a log file. Streams lines, auto-detects format, returns all LogEntries.
 pub fn parse_log_file(
     path: impl AsRef<Path>,
