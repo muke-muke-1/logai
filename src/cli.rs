@@ -16,8 +16,10 @@ pub struct Cli {
 
 #[derive(clap::Subcommand)]
 pub enum Command {
-    /// Analyze a log file
+    /// 分析日志文件
     Analyze(AnalyzeArgs),
+    /// 实时监听日志文件，周期性 AI 分析
+    Watch(WatchArgs),
 }
 
 #[derive(clap::Args)]
@@ -40,6 +42,36 @@ pub struct AnalyzeArgs {
     /// Minimum log level to include
     #[arg(long, default_value = "info")]
     pub min_level: LevelArg,
+}
+
+#[derive(clap::Args)]
+pub struct WatchArgs {
+    /// 日志文件路径
+    pub file: PathBuf,
+
+    /// AI 模型后端（默认自动检测）
+    #[arg(short, long, default_value = "auto")]
+    pub model: ModelArg,
+
+    /// 使用深度/更强模型进行分析
+    #[arg(long, default_value_t = false)]
+    pub deep: bool,
+
+    /// 强制日志格式
+    #[arg(short, long, default_value = "auto")]
+    pub format: FormatArg,
+
+    /// 最低日志级别
+    #[arg(long, default_value = "info")]
+    pub min_level: LevelArg,
+
+    /// 时间窗口（秒），默认 30
+    #[arg(long, default_value_t = 30)]
+    pub window: u64,
+
+    /// 启动时分析的最大行数（默认 10000）
+    #[arg(long, default_value_t = 10000)]
+    pub max_initial_lines: usize,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -152,5 +184,6 @@ pub async fn run() -> anyhow::Result<()> {
             render_report(&summary, &response, elapsed, backend.model_name());
             Ok(())
         }
+        Command::Watch(args) => crate::watcher::watch_file(args).await,
     }
 }
