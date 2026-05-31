@@ -64,8 +64,8 @@ pub fn aggregate(entries: &[LogEntry]) -> AnalysisSummary {
         // which meant spike detection never actually worked in production.
         // Now uses proper windowed counts from bucketer.
         let anomaly_windows: Vec<(chrono::DateTime<chrono::Utc>, usize)> = {
-            let ref_ts = time_start.unwrap_or_else(|| {
-                chrono::DateTime::from_timestamp(0, 0).unwrap()
+            let ref_ts = first_seen.unwrap_or_else(|| {
+                chrono::DateTime::UNIX_EPOCH
             });
             window_counts
                 .iter()
@@ -104,6 +104,30 @@ pub fn aggregate(entries: &[LogEntry]) -> AnalysisSummary {
             trend,
         });
     }
+
+    // Cap anomaly types to at most 3 each per spec
+    let mut spike_count = 0;
+    let mut new_error_count = 0;
+    let mut recovery_count = 0;
+    let mut periodic_count = 0;
+    all_anomalies.retain(|a| match a {
+        Anomaly::Spike { .. } => {
+            spike_count += 1;
+            spike_count <= 3
+        }
+        Anomaly::NewError { .. } => {
+            new_error_count += 1;
+            new_error_count <= 3
+        }
+        Anomaly::SilentRecovery { .. } => {
+            recovery_count += 1;
+            recovery_count <= 3
+        }
+        Anomaly::PeriodicPattern { .. } => {
+            periodic_count += 1;
+            periodic_count <= 3
+        }
+    });
 
     token_budget::build_summary(
         error_groups,
