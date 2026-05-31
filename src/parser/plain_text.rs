@@ -8,6 +8,74 @@ static LEVEL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
         .unwrap()
 });
 
+/// Parse plain text log lines from an iterator (streaming-friendly).
+/// Same state machine as parse_plain_text but takes an iterator.
+pub fn parse_plain_text_iter<I>(lines: I) -> Vec<LogEntry>
+where
+    I: Iterator<Item = String>,
+{
+    let mut entries: Vec<LogEntry> = Vec::new();
+    let mut current_stack: Vec<String> = Vec::new();
+    let mut line_number = 0usize;
+
+    for line in lines {
+        line_number += 1;
+        let is_indented = line.starts_with(' ') || line.starts_with('\t');
+        let is_stack_continuation = line.contains("Traceback")
+            || line.contains("panic:")
+            || line.contains("Exception in thread")
+            || line.trim_start().starts_with("at ")
+            || line.trim_start().starts_with("... ");
+
+        if (is_indented || is_stack_continuation) && !entries.is_empty() {
+            current_stack.push(line.clone());
+            continue;
+        }
+
+        if detect_timestamp(&line) {
+            if let Some(last) = entries.last_mut() {
+                if !current_stack.is_empty() {
+                    last.stack_trace = Some(current_stack.join("\n"));
+                    current_stack.clear();
+                }
+            }
+            let entry = parse_log_line(&line, line_number);
+            entries.push(entry);
+        } else if entries.is_empty() {
+            let entry = LogEntry {
+                timestamp: None,
+                level: Some(Level::Unknown),
+                message: line.clone(),
+                stack_trace: None,
+                raw_line: line.clone(),
+                fields: std::collections::HashMap::new(),
+                line_number,
+            };
+            entries.push(entry);
+        } else if let Some(last) = entries.last_mut() {
+            if last.message.is_empty() {
+                last.message = line.clone();
+            } else {
+                last.message.push(' ');
+                last.message.push_str(&line);
+            }
+            // Keep raw_line updated for the first entry in a group
+            if last.raw_line.is_empty() {
+                last.raw_line = line.clone();
+            }
+        }
+    }
+
+    // Flush remaining stack
+    if let Some(last) = entries.last_mut() {
+        if !current_stack.is_empty() {
+            last.stack_trace = Some(current_stack.join("\n"));
+        }
+    }
+
+    entries
+}
+
 /// Parse plain text log lines into a Vec of LogEntry.
 /// Uses a state machine: timestamped lines start new entries,
 /// indented/traceback lines are appended to the previous entry's stack trace.

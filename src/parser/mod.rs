@@ -66,7 +66,7 @@ pub fn parse_log_file(
             Ok(entries)
         }
         Format::PlainText => {
-            Ok(plain_text::parse_plain_text(&lines))
+            Ok(plain_text::parse_plain_text_iter(lines.into_iter()))
         }
     }
 }
