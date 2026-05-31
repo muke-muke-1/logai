@@ -23,6 +23,7 @@ regex = "1"
 crossterm = "0.28"
 async-trait = "0.1"
 anyhow = "1"
+notify = "6"
 
 [dev-dependencies]
 assert_cmd = "2"
