@@ -47,11 +47,9 @@ fn test_parse_multiple_json_lines() {
 
 #[test]
 fn test_parse_with_format_override() {
-    let path = write_temp_log(
-        r#"{"timestamp":"2026-06-01T08:00:00Z","level":"ERROR","message":"fail"}"#,
-    );
-    let entries =
-        logai::parser::parse_log_file(&path, Some(logai::types::Format::Json)).unwrap();
+    let path =
+        write_temp_log(r#"{"timestamp":"2026-06-01T08:00:00Z","level":"ERROR","message":"fail"}"#);
+    let entries = logai::parser::parse_log_file(&path, Some(logai::types::Format::Json)).unwrap();
     assert_eq!(entries.len(), 1);
     fs::remove_file(&path).ok();
 }

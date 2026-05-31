@@ -32,10 +32,7 @@ fn read_last_n_lines(path: &Path, max_lines: usize) -> std::io::Result<Vec<Strin
 }
 
 /// 从文件指定位置读取新增的字节，返回新行和新的文件位置
-fn read_new_lines(
-    path: &Path,
-    last_position: u64,
-) -> std::io::Result<(Vec<String>, u64)> {
+fn read_new_lines(path: &Path, last_position: u64) -> std::io::Result<(Vec<String>, u64)> {
     let metadata = std::fs::metadata(path)?;
     let current_size = metadata.len();
 
@@ -113,10 +110,7 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
     let response = with_retry(|| backend.analyze(&summary)).await?;
     render_report(&summary, &response, 0.0, backend.model_name());
 
-    println!(
-        "\n--- 正在监听新日志 (窗口: {}秒) ---",
-        args.window
-    );
+    println!("\n--- 正在监听新日志 (窗口: {}秒) ---", args.window);
 
     // ============ 设置 notify ============
 
@@ -189,24 +183,40 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
             }
 
             _ = async_rx.recv() => {
-                loop {
-                    match std::fs::metadata(&file_path) {
-                        Ok(metadata) => {
-                            let current_size = metadata.len();
+                match std::fs::metadata(&file_path) {
+                    Ok(metadata) => {
+                        let current_size = metadata.len();
 
-                            if file_reappeared {
-                                eprintln!("✅ 文件已恢复，继续监听...");
-                                last_position = 0;
-                                entries.clear();
-                                file_reappeared = false;
+                        if file_reappeared {
+                            eprintln!("✅ 文件已恢复，继续监听...");
+                            last_position = 0;
+                            entries.clear();
+                            file_reappeared = false;
+                        }
+
+                        if current_size < last_position {
+                            eprintln!("⚠️ 检测到文件截断，正在重置...");
+                            last_position = 0;
+                            entries.clear();
+                            if let Ok(restored) = read_last_n_lines(&file_path, args.max_initial_lines) {
+                                let parsed = parse_lines(&restored, format);
+                                let filtered: Vec<LogEntry> = parsed
+                                    .into_iter()
+                                    .filter(|e| {
+                                        let level = e.level.unwrap_or(Level::Unknown);
+                                        level.severity() <= min_level.severity()
+                                    })
+                                    .collect();
+                                entries = filtered;
+                                last_position = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(last_position);
+                                _total_lines = entries.len() as u64;
                             }
-
-                            if current_size < last_position {
-                                eprintln!("⚠️ 检测到文件截断，正在重置...");
-                                last_position = 0;
-                                entries.clear();
-                                if let Ok(restored) = read_last_n_lines(&file_path, args.max_initial_lines) {
-                                    let parsed = parse_lines(&restored, format);
+                        } else if current_size > last_position {
+                            if let Ok((new_lines, new_position)) =
+                                read_new_lines(&file_path, last_position)
+                            {
+                                if !new_lines.is_empty() {
+                                    let parsed = parse_lines(&new_lines, format);
                                     let filtered: Vec<LogEntry> = parsed
                                         .into_iter()
                                         .filter(|e| {
@@ -214,45 +224,21 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
                                             level.severity() <= min_level.severity()
                                         })
                                         .collect();
-                                    entries = filtered;
-                                    last_position = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(last_position);
-                                    _total_lines = entries.len() as u64;
+                                    pending_entries.extend(filtered);
                                 }
+                                last_position = new_position;
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        eprintln!("⚠️ 文件消失，等待重新出现...");
+                        loop {
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                            if file_path.exists() {
+                                file_reappeared = true;
+                                let _ = watcher.watch(&file_path, RecursiveMode::NonRecursive);
                                 break;
                             }
-
-                            if current_size > last_position {
-                                match read_new_lines(&file_path, last_position) {
-                                    Ok((new_lines, new_position)) => {
-                                        if !new_lines.is_empty() {
-                                            let parsed = parse_lines(&new_lines, format);
-                                            let filtered: Vec<LogEntry> = parsed
-                                                .into_iter()
-                                                .filter(|e| {
-                                                    let level = e.level.unwrap_or(Level::Unknown);
-                                                    level.severity() <= min_level.severity()
-                                                })
-                                                .collect();
-                                            pending_entries.extend(filtered);
-                                        }
-                                        last_position = new_position;
-                                    }
-                                    Err(_) => {}
-                                }
-                            }
-                            break;
-                        }
-                        Err(_) => {
-                            eprintln!("⚠️ 文件消失，等待重新出现...");
-                            loop {
-                                tokio::time::sleep(Duration::from_secs(1)).await;
-                                if file_path.exists() {
-                                    file_reappeared = true;
-                                    let _ = watcher.watch(&file_path, RecursiveMode::NonRecursive);
-                                    break;
-                                }
-                            }
-                            break;
                         }
                     }
                 }

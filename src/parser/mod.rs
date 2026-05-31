@@ -36,9 +36,7 @@ pub fn parse_lines(lines: &[String], format: Format) -> Vec<LogEntry> {
             .enumerate()
             .filter_map(|(i, line)| json::parse_json_line(line, i + 1))
             .collect(),
-        Format::PlainText => {
-            plain_text::parse_plain_text_iter(lines.to_vec().into_iter())
-        }
+        Format::PlainText => plain_text::parse_plain_text_iter(lines.iter().cloned()),
     }
 }
 
