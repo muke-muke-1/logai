@@ -96,7 +96,7 @@ pub enum FormatArg {
 }
 
 impl FormatArg {
-    fn to_format(&self) -> Option<crate::types::Format> {
+    pub fn to_format(&self) -> Option<crate::types::Format> {
         match self {
             FormatArg::Json => Some(crate::types::Format::Json),
             FormatArg::Text => Some(crate::types::Format::PlainText),
@@ -114,7 +114,7 @@ pub enum LevelArg {
 }
 
 impl LevelArg {
-    fn to_level(&self) -> crate::types::Level {
+    pub fn to_level(&self) -> crate::types::Level {
         match self {
             LevelArg::Error => crate::types::Level::Error,
             LevelArg::Warn => crate::types::Level::Warn,
