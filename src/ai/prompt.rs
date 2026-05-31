@@ -69,10 +69,16 @@ pub fn build_analysis_prompt(summary: &AnalysisSummary) -> String {
                     prompt.push_str(&format!("🆕 错误组 {}: 新出现的错误\n", group_index + 1));
                 }
                 Anomaly::SilentRecovery { group_index } => {
-                    prompt.push_str(&format!("✅ 错误组 {}: 已静默恢复\n", group_index + 1));
+                    prompt.push_str(&format!(
+                        "✅ 错误组 {}: 已静默恢复 — 前半段曾出现但最近2个时间窗口已消失。请判断是真正恢复还是暂时静默，若为静默请说明可能的触发条件。\n",
+                        group_index + 1
+                    ));
                 }
                 Anomaly::PeriodicPattern { group_index, period_minutes } => {
-                    prompt.push_str(&format!("🔁 错误组 {}: 周期性出现，约每 {} 分钟一次\n", group_index + 1, period_minutes));
+                    prompt.push_str(&format!(
+                        "🔁 错误组 {}: 周期性出现，约每 {} 分钟一次。请分析可能的定时任务、cron job、心跳检测或周期性触发器。\n",
+                        group_index + 1, period_minutes
+                    ));
                 }
             }
         }
