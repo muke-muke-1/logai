@@ -1,0 +1,11 @@
+// JSON log fixture — typical structured logging output
+{"time":"2026-05-31T08:03:12Z","level":"error","msg":"Connection timeout to db-primary.internal:5432","stack":"at ConnectionPool.acquire() line 234\nat DatabaseClient.query() line 156\nat ApiHandler.get_user() line 89"}
+{"time":"2026-05-31T08:03:13Z","level":"error","msg":"Connection timeout to db-primary.internal:5432"}
+{"time":"2026-05-31T08:03:13Z","level":"error","msg":"Connection timeout to db-primary.internal:5432"}
+{"time":"2026-05-31T08:04:01Z","level":"info","msg":"Request processed successfully","status":200,"duration_ms":45}
+{"time":"2026-05-31T08:04:02Z","level":"error","msg":"Connection timeout to db-primary.internal:5432","stack":"at ConnectionPool.acquire() line 234"}
+{"time":"2026-05-31T14:22:15Z","level":"error","msg":"SSL certificate expired","stack":"at TLSHandshake.verify() line 12\nat HttpClient.send() line 88"}
+{"time":"2026-05-31T14:22:16Z","level":"error","msg":"SSL certificate expired"}
+{"time":"2026-05-31T14:22:17Z","level":"error","msg":"SSL certificate expired"}
+{"time":"2026-05-31T18:29:45Z","level":"error","msg":"Connection timeout to db-primary.internal:5432","stack":"at ConnectionPool.acquire() line 234"}
+{"time":"2026-05-31T18:29:46Z","level":"warn","msg":"Retry attempt 3/3 exhausted"}

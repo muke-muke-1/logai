@@ -1,0 +1,45 @@
+[2026-05-31 08:03:12] ERROR - db/connection.py:234
+Connection timeout after 30 seconds
+Traceback (most recent call last):
+  File "db/connection.py", line 234, in acquire
+    raise TimeoutError("Connection pool exhausted")
+TimeoutError: Connection pool exhausted
+
+[2026-05-31 08:03:13] ERROR - db/connection.py:234
+Connection timeout after 30 seconds
+
+[2026-05-31 08:03:13] ERROR - db/connection.py:234
+Connection timeout after 30 seconds
+
+[2026-05-31 08:04:01] INFO - api/handler.py:89
+Request processed: GET /users/42 => 200 (45ms)
+
+[2026-05-31 08:04:02] ERROR - db/connection.py:234
+Connection timeout after 30 seconds
+Traceback (most recent call last):
+  File "db/connection.py", line 234, in acquire
+    raise TimeoutError("Connection pool exhausted")
+TimeoutError: Connection pool exhausted
+
+[2026-05-31 14:22:15] ERROR - http/client.py:12
+SSL certificate verification failed: certificate has expired
+Traceback (most recent call last):
+  File "http/client.py", line 12, in send
+    raise SSLError("Certificate expired at 2026-05-30")
+SSLError: Certificate expired at 2026-05-30
+
+[2026-05-31 14:22:16] ERROR - http/client.py:12
+SSL certificate verification failed: certificate has expired
+
+[2026-05-31 14:22:17] ERROR - http/client.py:12
+SSL certificate verification failed: certificate has expired
+
+[2026-05-31 18:29:45] ERROR - db/connection.py:234
+Connection timeout after 30 seconds
+Traceback (most recent call last):
+  File "db/connection.py", line 234, in acquire
+    raise TimeoutError("Connection pool exhausted")
+TimeoutError: Connection pool exhausted
+
+[2026-05-31 18:29:46] WARN - db/connection.py:240
+Retry attempt 3/3 exhausted, giving up

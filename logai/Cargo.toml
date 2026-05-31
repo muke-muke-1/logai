@@ -1,0 +1,31 @@
+[package]
+name = "logai"
+version = "0.1.0"
+edition = "2021"
+description = "AI-powered log analysis CLI — pipe your logs, get root cause analysis"
+license = "MIT"
+repository = "https://github.com/user/logai"
+keywords = ["cli", "logs", "ai", "debugging", "devtools"]
+categories = ["command-line-utilities", "development-tools::debugging"]
+
+[[bin]]
+name = "logai"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+crossterm = "0.28"
+tabled = "0.17"
+async-trait = "0.1"
+anyhow = "1"
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
