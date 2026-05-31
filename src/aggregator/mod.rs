@@ -29,35 +29,40 @@ pub fn aggregate(entries: &[LogEntry]) -> AnalysisSummary {
     let mut all_anomalies: Vec<Anomaly> = Vec::new();
 
     for (group_idx, (sig, indices)) in groups.iter().enumerate() {
-        let group_entries: Vec<&LogEntry> = indices.iter().map(|&i| &entries[i]).collect();
-        let count = group_entries.len();
+        let count = indices.len();
 
-        let first_seen = group_entries.iter().filter_map(|e| e.timestamp).min();
-        let last_seen = group_entries.iter().filter_map(|e| e.timestamp).max();
+        let first_seen = indices
+            .iter()
+            .filter_map(|&i| entries[i].timestamp)
+            .min();
+        let last_seen = indices
+            .iter()
+            .filter_map(|&i| entries[i].timestamp)
+            .max();
 
-        // Up to 3 raw samples
-        let samples: Vec<String> = group_entries
+        // Up to 3 raw samples (clones are necessary — summary outlives entries)
+        let samples: Vec<String> = indices
             .iter()
             .take(3)
-            .map(|e| e.raw_line.clone())
+            .map(|&i| entries[i].raw_line.clone())
             .collect();
 
         // Representative stack trace
-        let stack_trace = group_entries
+        let stack_trace = indices
             .iter()
-            .find_map(|e| e.stack_trace.clone());
+            .find_map(|&i| entries[i].stack_trace.clone());
 
         // Trend from time-based bucketing
         let timestamps_for_group: Vec<Option<chrono::DateTime<chrono::Utc>>> =
-            group_entries.iter().map(|e| e.timestamp).collect();
+            indices.iter().map(|&i| entries[i].timestamp).collect();
         let window_counts =
             bucketer::bucket_by_time(&timestamps_for_group, bucketer::DEFAULT_WINDOW_SECS);
         let trend = bucketer::compute_trend(&window_counts);
 
         // Anomaly detection
-        let window_data: Vec<(chrono::DateTime<chrono::Utc>, usize)> = group_entries
+        let window_data: Vec<(chrono::DateTime<chrono::Utc>, usize)> = indices
             .iter()
-            .filter_map(|e| e.timestamp.map(|t| (t, 1usize)))
+            .filter_map(|&i| entries[i].timestamp.map(|t| (t, 1usize)))
             .collect();
         let mut anomalies = anomaly::detect_anomalies(&window_data, group_idx);
 
