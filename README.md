@@ -210,13 +210,13 @@ cargo install logai
 
 ### Option 2: Pre-built binaries / 预编译
 
-Download from [GitHub Releases](https://github.com/user/logai/releases).  
+Download from [GitHub Releases](https://github.com/muke-muke-1/logai/releases).  
 One file. Drop it in your `$PATH`. Done.
 
 ### Option 3: Build from source / 源码编译
 
 ```bash
-git clone https://github.com/user/logai.git
+git clone https://github.com/muke-muke-1/logai.git
 cd logai
 cargo build --release
 # Binary at ./target/release/logai
@@ -235,7 +235,7 @@ export DEEPSEEK_API_KEY="sk-..."
 cargo run -- analyze tests/fixtures/json_error.log --model deepseek
 ```
 
-67 tests. 0 failures. Zero is a nice number.
+75 tests. 0 failures. Zero is a nice number.
 
 ---
 
