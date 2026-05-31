@@ -50,7 +50,7 @@ impl AiBackend for OllamaBackend {
     }
 
     fn model_name(&self) -> &str { "Ollama" }
-    fn actual_model(&self, _deep: bool) -> &str {
-        "llama3.2"
+    fn actual_model(&self, deep: bool) -> &str {
+        if deep { "llama3.2" } else { "llama3.2" }
     }
 }

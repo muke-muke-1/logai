@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -53,9 +53,10 @@ pub fn parse_timestamp(s: &str) -> Option<DateTime<Utc>> {
     if let Ok(dt) = NaiveDateTime::parse_from_str(cleaned, "%Y-%m-%d %H:%M:%S,%3f") {
         return Some(DateTime::from_naive_utc_and_offset(dt, Utc));
     }
-    // Syslog: Mon DD HH:MM:SS — default to year 2026
+    // Syslog: Mon DD HH:MM:SS — use current system year
+    let current_year = chrono::Local::now().year();
     if let Ok(dt) =
-        NaiveDateTime::parse_from_str(&format!("2026 {}", cleaned), "%Y %b %d %H:%M:%S")
+        NaiveDateTime::parse_from_str(&format!("{} {}", current_year, cleaned), "%Y %b %d %H:%M:%S")
     {
         return Some(DateTime::from_naive_utc_and_offset(dt, Utc));
     }

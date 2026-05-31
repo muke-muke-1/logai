@@ -25,9 +25,9 @@ pub fn detect_anomalies(window_counts: &[WindowCount], group_index: usize) -> Ve
 
     let avg: f64 = non_zero.iter().sum::<usize>() as f64 / non_zero.len() as f64;
 
-    // Spike detection: count > avg * 2 and count > 3
+    // Spike detection: count > avg * 3 and count > 3
     for (_time, count) in window_counts.iter() {
-        if *count as f64 > avg * 2.0 && *count > 3 {
+        if *count as f64 > avg * 3.0 && *count > 3 {
             anomalies.push(Anomaly::Spike {
                 group_index,
                 multiplier: *count as f64 / avg.max(1.0),
@@ -64,7 +64,7 @@ mod tests {
         let windows = vec![
             (dt(0), 5),
             (dt(300), 5),
-            (dt(600), 25), // spike!
+            (dt(600), 50), // spike! (50 > avg 16.25 * 3 = 48.75)
             (dt(900), 5),
         ];
         let anomalies = detect_anomalies(&windows, 0);
