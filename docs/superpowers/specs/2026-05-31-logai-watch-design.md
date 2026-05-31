@@ -1,78 +1,78 @@
-# logai watch v1.2 Design
+# logai watch v1.2 设计
 
-**Date:** 2026-05-31
-**Status:** draft
-**Scope:** Real-time log monitoring subcommand — `logai watch <file>`
-
----
-
-## Motivation
-
-`logai analyze` is great for post-mortem debugging, but production issues demand real-time awareness. `logai watch` adds live tailing + periodic AI analysis so you can catch problems as they happen, not 30 minutes later when someone finally checks the logs.
+**日期:** 2026-06-01
+**状态:** 草案
+**范围:** 实时日志监控子命令 — `logai watch <文件>`
 
 ---
 
-## Architecture
+## 动机
+
+`logai analyze` 擅长事后排查，但线上问题需要实时感知。`logai watch` 提供实时 tail + 周期性 AI 分析，让你在问题发生的当下就捕捉到，而不是 30 分钟后有人翻日志才发现。
+
+---
+
+## 架构
 
 ```
 logai watch app.log --window 30
         │
         ▼
 ┌──────────────────────────────────┐
-│  Watcher (notify)                 │  ← IN_MODIFY events on the file
-│  Detects new data written to file │
+│  监听器 (notify)                   │  ← 监听文件的 IN_MODIFY 事件
+│  检测文件是否有新数据写入            │
 └──────────────┬───────────────────┘
                ▼
 ┌──────────────────────────────────┐
-│  Incremental Reader               │  ← BufReader::seek to last position
-│  Reads only new lines since last  │     On truncate: reset to 0
-│  read; parses into Vec<LogEntry>  │     On delete: wait for reappearance
+│  增量读取器                        │  ← BufReader seek 到上次读取位置
+│  只读取上次读取之后的新行            │     截断时：重置到文件头
+│  解析为 Vec<LogEntry>              │     删除时：等待文件重新出现
 └──────────────┬───────────────────┘
                ▼
 ┌──────────────────────────────────┐
-│  Accumulator                      │  ← Append new entries to accumulated Vec
-│  Runs full aggregate() each tick  │     aggregate is O(n) — safe for typical
-│  Detects spikes, new errors, etc. │     log volumes over a monitoring session
+│  累积器                            │  ← 将新条目追加到累积的 Vec 中
+│  每次窗口触发时全量重跑 aggregate()   │     aggregate 是 O(n)，典型监控
+│  检测 spike、新错误等异常            │     场景的日志量完全够用
 └──────────────┬───────────────────┘
                ▼
 ┌──────────────────────────────────┐
-│  AI Analysis (per window tick)    │  ← Reuses create_backend + analyze
-│  Only triggers every --window sec │     with_retry on failure
+│  AI 分析（每时间窗口触发一次）       │  ← 复用 create_backend + analyze
+│  只在 --window 秒间隔时触发         │     失败时 with_retry 重试一次
 └──────────────┬───────────────────┘
                ▼
 ┌──────────────────────────────────┐
-│  Scrolling Output                 │  ← println! with timestamp prefix
-│  "[14:03:27] 🔴 Spike detected..." │     render_report for the summary
+│  滚动输出                          │  ← 带时间戳的 println!
+│  "[14:03:27] 🔴 检测到 spike..."    │     用 render_report 输出摘要
 └──────────────────────────────────┘
 ```
 
-**New file:** `src/watcher.rs` — notify event loop + incremental read + time-window trigger
-**Modified:**
-- `src/cli.rs` — add `Watch` subcommand and `WatchArgs`
-- `src/parser/mod.rs` — expose `parse_lines(&[String])` helper for incremental parsing
-- `src/main.rs` — no changes (subcommand dispatch already generic)
+**新增文件:** `src/watcher.rs` — notify 事件循环 + 增量读取 + 时间窗口触发
+**修改文件:**
+- `src/cli.rs` — 新增 `Watch` 子命令和 `WatchArgs`
+- `src/parser/mod.rs` — 暴露 `parse_lines(&[String])` 辅助函数，供增量解析使用
+- `src/main.rs` — 无需改动（子命令分发已是通用的）
 
-**Reused (no changes):**
-- `src/aggregator/` — `aggregate()` called each window tick
-- `src/ai/` — `create_backend()`, `analyze()`, `with_retry()`
-- `src/renderer.rs` — `render_report()` per tick
+**复用（不改动）:**
+- `src/aggregator/` — 每个窗口触发时调用 `aggregate()`
+- `src/ai/` — `create_backend()`、`analyze()`、`with_retry()`
+- `src/renderer.rs` — 每个窗口触发时调用 `render_report()`
 
 ---
 
-## CLI Interface
+## CLI 接口
 
 ```bash
-# Minimal
+# 最简用法
 logai watch app.log
 
-# Full
+# 完整参数
 logai watch app.log \
-    --window 30 \           # Time window in seconds (default: 30)
-    --model deepseek \      # AI backend
-    --deep \                # Deep/stronger model
-    --format json \         # Force log format
-    --min-level warn \      # Minimum log level
-    --max-initial-lines 10000  # Max lines to analyze on startup (default: 10000)
+    --window 30 \              # 时间窗口（秒），默认 30
+    --model deepseek \         # AI 后端
+    --deep \                   # 深度/更强模型
+    --format json \            # 强制日志格式
+    --min-level warn \         # 最低日志级别
+    --max-initial-lines 10000  # 启动时分析的最大行数（默认 10000）
 ```
 
 ```rust
@@ -102,71 +102,71 @@ pub struct WatchArgs {
 
 ---
 
-## Behavior Specification
+## 行为规范
 
-### Startup
+### 启动阶段
 
-1. Verify file exists — if not, error and exit immediately
-2. Read the file content (last `--max-initial-lines` lines only for files exceeding that)
-3. Parse with format detection (or `--format` override), apply `--min-level` filter
-4. Run `aggregate()` + AI `analyze()` + `render_report()` — same as `analyze` subcommand
-5. Print separator `--- Watching for new log entries (window: 30s) ---`
-6. Record current file size as `last_position`
+1. 验证文件存在 — 不存在则报错并立即退出
+2. 读取文件内容（如果超过 `--max-initial-lines` 行，只读最后那么多行）
+3. 自动检测格式（或用 `--format` 强制指定），应用 `--min-level` 过滤
+4. 运行 `aggregate()` + AI `analyze()` + `render_report()` — 与 `analyze` 子命令一致
+5. 打印分隔线 `--- 正在监听新日志 (窗口: 30秒) ---`
+6. 记录当前文件大小作为 `last_position`
 
-### Watch Loop
+### 监听循环
 
-1. Wait for `notify` `IN_MODIFY` event on the file
-2. On event: seek to `last_position`, read new bytes, parse new lines into `Vec<LogEntry>`
-3. Apply `--min-level` filter to new entries
-4. Append filtered entries to accumulated `Vec<LogEntry>`
-5. Update `last_position`
-6. Every `--window` seconds: if any new entries accumulated, run `aggregate()` + AI `analyze()` + print scrolling output
-7. Between window ticks: batch new entries silently (no analysis)
+1. 等待 `notify` 的 `IN_MODIFY` 事件
+2. 收到事件后：seek 到 `last_position`，读取新增字节，解析新行为 `Vec<LogEntry>`
+3. 对新条目应用 `--min-level` 过滤
+4. 将过滤后的条目追加到累积的 `Vec<LogEntry>` 中
+5. 更新 `last_position`
+6. 每 `--window` 秒：如果累积了新条目，运行 `aggregate()` + AI `analyze()` + 打印滚动输出
+7. 窗口间隔期间：静默累积新条目（不触发分析）
 
-### Output Format
+### 输出格式
 
 ```
-🔍 Parsing app.log...
-   Parsed 4230 log entries
-   Found 5 error groups, 2 anomalies
-🤖 Analyzing with DeepSeek (deepseek-chat)...
+🔍 正在解析 app.log...
+   已解析 4230 条日志
+   发现 5 个错误分组, 2 个异常
+🤖 正在用 DeepSeek (deepseek-chat) 分析...
 
 ╔══════════════════════════════════════════════════════╗
-║          📊 logai 分析报告 (initial)                   ║
-... (full report) ...
+║          📊 logai 分析报告 (初始)                      ║
+... (完整报告) ...
 ╚══════════════════════════════════════════════════════╝
 
---- Watching for new log entries (window: 30s) ---
+--- 正在监听新日志 (窗口: 30秒) ---
 
-[14:03:27] 📊 Window #1 · +47 lines · 5.2s
-... (analysis output) ...
+[14:03:27] 📊 窗口 #1 · +47 行 · 耗时 5.2秒
+... (分析输出) ...
 
-[14:04:00] 📊 Window #2 · +12 lines · 3.1s
-... (analysis output) ...
+[14:04:00] 📊 窗口 #2 · +12 行 · 耗时 3.1秒
+... (分析输出) ...
 ```
 
-### Error Handling
+### 错误处理
 
-| Scenario | Behavior |
-|----------|----------|
-| **File not found at startup** | Error and exit immediately |
-| **File truncated** (size < last_position) | Print `⚠️ File truncated, resetting...`, reset `last_position = 0`, re-read up to `--max-initial-lines` lines, reset accumulated entries |
-| **File deleted** (logrotate mv) | Print `⚠️ File gone, waiting for reappearance...`, poll `Path::exists()` every 1s, on reappearance re-open, reset state, print `✅ File reappeared, resuming...` |
-| **File rotated in-place** (mv old + touch new) | notify detects new inode via `IN_CREATE` or `IN_MOVED_FROM` + `IN_MOVED_TO`, re-open file, reset |
-| **AI API call fails** | Print `⚠️ AI analysis failed: <error> — skipping this window`, keep accumulated entries for next window |
-| **Ctrl+C** | Print summary: `⏹️ Watched 12m 30s · 4 analyses · 2 alerts · 523 lines total`, exit 0 |
-| **File grows beyond max_initial_lines during watch** | No impact — `max_initial_lines` only applies at startup. Watch accumulates all new lines. |
+| 场景 | 行为 |
+|------|------|
+| **启动时文件不存在** | 报错并立即退出 |
+| **文件被截断**（文件大小 < last_position） | 打印 `⚠️ 检测到文件截断，正在重置...`，将 `last_position` 重置为 0，重新读取最多 `--max-initial-lines` 行，重置累积条目 |
+| **文件被删除**（如 logrotate mv） | 打印 `⚠️ 文件消失，等待重新出现...`，每 1 秒轮询 `Path::exists()`，文件重新出现后重新打开，重置状态，打印 `✅ 文件已恢复，继续监听...` |
+| **文件原地轮转**（mv 旧文件 + touch 新文件） | notify 通过 `IN_CREATE` 或 `IN_MOVED_FROM` + `IN_MOVED_TO` 检测到新 inode，重新打开文件，重置状态 |
+| **AI API 调用失败** | 打印 `⚠️ AI 分析失败: <错误信息> — 跳过本次窗口`，保留累积条目供下个窗口使用 |
+| **Ctrl+C 退出** | 打印摘要：`⏹️ 已监听 12分30秒 · 4 次分析 · 2 次告警 · 共 523 行`，正常退出 |
+| **监听期间文件超过 max_initial_lines** | 无影响 — `max_initial_lines` 仅对启动阶段生效，监听期间会累积所有新行 |
 
 ---
 
-## Implementation Notes
+## 实现要点
 
-### Incremental Parser Reuse
+### 增量解析器复用
 
-The existing `parse_log_file()` reads a whole file. We need a lower-level entry point:
+现有 `parse_log_file()` 一次性读取整个文件。需要新增一个更低层的入口：
 
 ```rust
-// NEW in src/parser/mod.rs
+// 新增于 src/parser/mod.rs
 pub fn parse_lines(lines: &[String], format: Format) -> Vec<LogEntry> {
     match format {
         Format::Json => lines.iter().enumerate()
@@ -179,11 +179,11 @@ pub fn parse_lines(lines: &[String], format: Format) -> Vec<LogEntry> {
 }
 ```
 
-The watcher calls `detect_format()` once at startup, then calls `parse_lines()` with the resolved format for each batch of new lines.
+监听器在启动时调用一次 `detect_format()`，后续每批新行都用已确定的 format 调用 `parse_lines()`。
 
-### notify Event Loop
+### notify 事件循环
 
-Use `notify` crate with `Watcher` + `mpsc` channel:
+使用 `notify` crate 的 `Watcher` + `mpsc` 通道：
 
 ```rust
 let (tx, rx) = std::sync::mpsc::channel();
@@ -193,53 +193,53 @@ let mut watcher = notify::recommended_watcher(move |res| {
 watcher.watch(file_path, RecursiveMode::NonRecursive)?;
 ```
 
-Main loop: `tokio::select!` between `rx.recv()` (file events) and `tokio::time::sleep(window)` (analysis tick).
+主循环：`tokio::select!` 在 `rx.recv()`（文件事件）和 `tokio::time::sleep(window)`（分析触发）之间切换。
 
-### Tokio Compatibility
+### Tokio 兼容性
 
-`notify::recommended_watcher` runs on its own thread. Use `tokio::task::spawn_blocking` or a `std::sync::mpsc` channel to bridge into the async runtime. The main watch loop is an async function that `select!`s between the channel and a timer.
-
----
-
-## Test Plan
-
-| Test | Type | What it verifies |
-|------|------|-----------------|
-| `test_watch_initial_analysis` | Integration | Startup analyses existing file content |
-| `test_watch_detects_new_lines` | Integration | Append to file → window tick → analysis triggered |
-| `test_watch_no_analysis_without_new_lines` | Unit | Empty window → no AI call |
-| `test_watch_truncate_reset` | Unit | File truncated → state reset |
-| `test_watch_file_not_found` | Integration | Missing file → error exit |
-| `test_watch_ctrl_c_summary` | Unit | Summary formatting includes correct counts |
-| `test_incremental_read_resumes_from_position` | Unit | seek + read returns only new lines |
-| `test_max_initial_lines` | Unit | Large file → only last N lines analyzed at startup |
-| `test_parse_lines_json` | Unit | `parse_lines()` works for JSON |
-| `test_parse_lines_plain_text` | Unit | `parse_lines()` works for plain text |
+`notify::recommended_watcher` 运行在自己的线程上。通过 `std::sync::mpsc` 通道桥接到异步运行时。主监听循环是 async 函数，用 `select!` 在通道和定时器之间切换。
 
 ---
 
-## Non-Goals
+## 测试计划
 
-- Multi-file watching (`logai watch *.log`) — separate feature
-- Desktop notifications (system tray, push) — separate feature
-- Persistent state across restarts — not needed for v1.2
-- Anomaly-only AI trigger — time-window-only for this version
-- Fixed dashboard TUI — scrolling output only for this version
-
----
-
-## Dependencies
-
-| Crate | Purpose | New? |
-|-------|---------|------|
-| `notify` 6.x | File system events | **New** |
-| All others | Reused from existing Cargo.toml | Existing |
+| 测试 | 类型 | 验证内容 |
+|------|------|----------|
+| `test_watch_initial_analysis` | 集成测试 | 启动时分析已有文件内容 |
+| `test_watch_detects_new_lines` | 集成测试 | 追加文件内容 → 窗口触发 → 触发分析 |
+| `test_watch_no_analysis_without_new_lines` | 单元测试 | 窗口内无新数据 → 不调用 AI |
+| `test_watch_truncate_reset` | 单元测试 | 文件截断 → 状态重置 |
+| `test_watch_file_not_found` | 集成测试 | 文件不存在 → 报错退出 |
+| `test_watch_ctrl_c_summary` | 单元测试 | 摘要格式化包含正确的计数 |
+| `test_incremental_read_resumes_from_position` | 单元测试 | seek + 读取只返回新行 |
+| `test_max_initial_lines` | 单元测试 | 大文件 → 启动时只分析最后 N 行 |
+| `test_parse_lines_json` | 单元测试 | `parse_lines()` 对 JSON 格式正确工作 |
+| `test_parse_lines_plain_text` | 单元测试 | `parse_lines()` 对纯文本格式正确工作 |
 
 ---
 
-## Risk Assessment
+## 不做
 
-- **Performance:** Full `aggregate()` each window tick is O(n). For a 30-minute watch session with 500 errors/minute, n ≈ 15000 — aggregate runs in <10ms. Not a bottleneck.
-- **Memory:** Accumulating all entries without bound could grow large. Address this in v1.3 if needed (e.g., configurable ring buffer). For now, typical monitoring sessions (hours at moderate volume) won't exceed a few hundred MB.
-- **notify on Windows:** `notify` crate supports Windows via `ReadDirectoryChangesW`. Test on Windows CI.
-- **AI cost:** With 30s window, worst case ~120 API calls/hour. At DeepSeek prices (~$0.27/1M tokens), each call consumes ~3K tokens → ~$0.0008/call → ~$0.10/hour. Acceptable.
+- 多文件监听（`logai watch *.log`）— 独立功能，另行设计
+- 桌面通知（系统托盘、推送）— 独立功能，另行设计
+- 跨重启持久化状态 — v1.2 不需要
+- 仅异常时触发 AI — 当前版本只做时间窗口触发
+- 固定仪表盘 TUI — 当前版本只做滚动输出
+
+---
+
+## 依赖
+
+| Crate | 用途 | 是否新增？ |
+|-------|------|-----------|
+| `notify` 6.x | 文件系统事件监听 | **新增** |
+| 其余全部 | 复用现有 Cargo.toml | 已有 |
+
+---
+
+## 风险评估
+
+- **性能:** 每个窗口全量重跑 `aggregate()` 是 O(n)。30 分钟监听、每分钟 500 条错误，n ≈ 15000，aggregate 耗时 <10ms。不是瓶颈。
+- **内存:** 无上限累积所有条目可能持续增长。v1.3 再考虑加可配置的环形缓冲区。目前典型监控场景（数小时、中等日志量）不会超过几百 MB。
+- **notify 在 Windows 上:** `notify` crate 通过 `ReadDirectoryChangesW` 支持 Windows。CI 已配置 Windows 环境下测试验证。
+- **AI 成本:** 30 秒窗口，最坏情况每小时约 120 次 API 调用。DeepSeek 价格（约 ¥0.002/1M tokens），每次调用消耗约 3K tokens → 约 ¥0.006/次 → 约 ¥0.7/小时。完全可接受。
