@@ -1,0 +1,3 @@
+- [ ] TUI AI 对话面板：TUI 内嵌 AI 对话框，选中错误后按 a 追问根因（P2，人工 ~1天 / CC ~30min）
+- [ ] HTML 交互图表：Chart.js 时间线 + 饼图 + 柱状图（P2，人工 ~3h / CC ~15min）
+- [ ] crates.io 发布：cargo publish + Homebrew formula（P2，人工 ~2h / CC ~10min）
