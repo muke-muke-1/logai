@@ -1,5 +1,5 @@
 use crate::aggregator::aggregate;
-use crate::parser::parse_log_file;
+use crate::parser::{detect_format, parse_lines, parse_log_file};
 use crate::types::{AnalysisSummary, Anomaly, ErrorGroup};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -9,8 +9,10 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame, Terminal,
 };
-use std::io;
+use std::fs::File;
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::PathBuf;
+use std::time::Instant;
 
 // ============================================================
 // Theme system
@@ -164,6 +166,16 @@ pub fn run_interactive(file_path: PathBuf, live: bool) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    // Detect format once (for live-mode incremental parsing)
+    let format = {
+        let sample: Vec<String> = entries
+            .iter()
+            .take(10)
+            .map(|e| e.raw_line.clone())
+            .collect();
+        detect_format(&sample)
+    };
+
     let summary = aggregate(&entries);
     if summary.error_groups.is_empty() {
         println!("✅ 没有发现错误。日志看起来很干净！");
@@ -172,6 +184,12 @@ pub fn run_interactive(file_path: PathBuf, live: bool) -> anyhow::Result<()> {
 
     let mut app = AppState::new(summary);
     app.live_mode = live;
+
+    // Live-mode state: track file position for incremental reads
+    let mut last_position = std::fs::metadata(&file_path)?.len();
+    let mut all_entries = entries;
+    let mut last_check = Instant::now();
+    let poll_interval = std::time::Duration::from_secs(1);
 
     // Setup terminal
     let mut stdout = io::stdout();
@@ -183,6 +201,43 @@ pub fn run_interactive(file_path: PathBuf, live: bool) -> anyhow::Result<()> {
     // Main loop
     while !app.should_quit {
         terminal.draw(|f| render_ui(f, &app))?;
+
+        // Live mode: poll file for changes
+        if app.live_mode && last_check.elapsed() >= poll_interval {
+            last_check = Instant::now();
+            if let Ok(metadata) = std::fs::metadata(&file_path) {
+                let current_size = metadata.len();
+                if current_size > last_position {
+                    // Read new content
+                    if let Ok(mut file) = File::open(&file_path) {
+                        if file.seek(SeekFrom::Start(last_position)).is_ok() {
+                            let mut buf = String::new();
+                            if file.read_to_string(&mut buf).is_ok() {
+                                let new_lines: Vec<String> =
+                                    buf.lines().map(String::from).collect();
+                                if !new_lines.is_empty() {
+                                    let parsed = parse_lines(&new_lines, format);
+                                    all_entries.extend(parsed);
+                                    let new_summary = aggregate(&all_entries);
+                                    if !new_summary.error_groups.is_empty() {
+                                        app.summary = new_summary.clone();
+                                        app.groups = new_summary.error_groups;
+                                        if app.selected_index >= app.groups.len() {
+                                            app.selected_index = app.groups.len().saturating_sub(1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    last_position = current_size;
+                } else if current_size < last_position {
+                    // File truncated — reset
+                    last_position = 0;
+                    all_entries.clear();
+                }
+            }
+        }
 
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
@@ -296,7 +351,7 @@ fn render_group_list(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
                     Style::default().fg(colors.highlight),
                 ),
                 Span::styled(
-                    truncate_sig(&g.signature, area.width.saturating_sub(20) as usize),
+                    truncate_str(&g.signature, area.width.saturating_sub(20) as usize),
                     Style::default().fg(colors.fg),
                 ),
                 Span::styled(format!(" ({})", g.count), count_style),
@@ -552,10 +607,6 @@ fn render_help_popup(f: &mut Frame, _app: &AppState, colors: &ThemeColors) {
 // ============================================================
 // Utility functions
 // ============================================================
-
-fn truncate_sig(s: &str, max_len: usize) -> String {
-    truncate_str(s, max_len)
-}
 
 fn truncate_str(s: &str, max_len: usize) -> String {
     if max_len == 0 {

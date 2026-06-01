@@ -41,6 +41,18 @@ impl Level {
     }
 }
 
+/// Filter log entries by minimum severity level.
+/// Keeps entries whose level is at or above `min_level` severity.
+pub fn filter_by_level(entries: Vec<LogEntry>, min_level: Level) -> Vec<LogEntry> {
+    entries
+        .into_iter()
+        .filter(|e| {
+            let level = e.level.unwrap_or(Level::Unknown);
+            level.severity() <= min_level.severity()
+        })
+        .collect()
+}
+
 /// 日志格式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {

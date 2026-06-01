@@ -181,13 +181,7 @@ pub async fn run() -> anyhow::Result<()> {
             let format_override = args.format.to_format();
             let entries = parse_log_file(file_path, format_override)?;
             let min_level = args.min_level.to_level();
-            let entries: Vec<_> = entries
-                .into_iter()
-                .filter(|e| {
-                    let level = e.level.unwrap_or(crate::types::Level::Unknown);
-                    level.severity() <= min_level.severity()
-                })
-                .collect();
+            let entries = crate::types::filter_by_level(entries, min_level);
             eprintln!(
                 "   Parsed {} log entries (after --min-level filter)",
                 entries.len()

@@ -1,6 +1,8 @@
 use chrono::TimeZone;
+use logai::aggregator::aggregate;
 use logai::aggregator::anomaly;
 use logai::aggregator::signature::build_signature;
+use logai::types::{Level, LogEntry};
 
 fn dt(ts: i64) -> chrono::DateTime<chrono::Utc> {
     chrono::Utc.timestamp_opt(ts, 0).unwrap()
@@ -89,4 +91,93 @@ fn test_periodic_pattern_too_few_appearances() {
     let windows = vec![(dt(0), 1), (dt(300), 0), (dt(600), 1)];
     let result = anomaly::detect_periodic_pattern(&windows, 0);
     assert!(result.is_empty());
+}
+
+// ============================================================
+// Anomaly capping + token budget tests
+// ============================================================
+
+fn make_entry(ts: i64, level: Level, message: &str) -> LogEntry {
+    LogEntry {
+        timestamp: Some(chrono::Utc.timestamp_opt(ts, 0).unwrap()),
+        level: Some(level),
+        message: message.to_string(),
+        stack_trace: None,
+        raw_line: message.to_string(),
+        fields: std::collections::HashMap::new(),
+        line_number: 0,
+    }
+}
+
+#[test]
+fn test_anomaly_spike_capped_at_three() {
+    let mut entries = Vec::new();
+    for g in 0..5 {
+        let sig = format!("error_type_{}", g);
+        for _ in 0..3 {
+            entries.push(make_entry(0, Level::Error, &sig));
+        }
+        for _ in 0..20 {
+            entries.push(make_entry(900, Level::Error, &sig));
+        }
+    }
+    entries.push(make_entry(1200, Level::Info, "end marker"));
+
+    let summary = aggregate(&entries);
+    let spike_count = summary
+        .anomalies
+        .iter()
+        .filter(|a| matches!(a, logai::types::Anomaly::Spike { .. }))
+        .count();
+    assert!(
+        spike_count <= 3,
+        "Expected <= 3 spikes, got {}",
+        spike_count
+    );
+}
+
+#[test]
+fn test_error_groups_trimmed_to_top_five() {
+    let mut entries = Vec::new();
+    for g in 0..10 {
+        let sig = format!("error_{}", g);
+        let count = (g + 1) * 2;
+        for _ in 0..count {
+            entries.push(make_entry(0, Level::Error, &sig));
+        }
+    }
+
+    let summary = aggregate(&entries);
+    assert!(
+        summary.error_groups.len() <= 5,
+        "Expected <= 5 groups, got {}",
+        summary.error_groups.len()
+    );
+    if summary.error_groups.len() >= 2 {
+        assert!(
+            summary.error_groups[0].count >= summary.error_groups[1].count,
+            "Groups should be sorted by count descending"
+        );
+    }
+}
+
+#[test]
+fn test_samples_capped_at_three() {
+    let mut entries = Vec::new();
+    for i in 0..10 {
+        entries.push(make_entry(
+            i as i64 * 60,
+            Level::Error,
+            "repeated error with different timestamp",
+        ));
+    }
+
+    let summary = aggregate(&entries);
+    if let Some(group) = summary.error_groups.first() {
+        assert!(
+            group.samples.len() <= 3,
+            "Expected <= 3 samples, got {}",
+            group.samples.len()
+        );
+    }
 }
