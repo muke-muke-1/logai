@@ -55,6 +55,37 @@ impl AiBackend for ClaudeBackend {
         parse_ai_response(&content)
     }
 
+    async fn chat(&self, prompt: &str) -> anyhow::Result<String> {
+        let model = self.actual_model(self.deep);
+        let body = serde_json::json!({
+            "model": model,
+            "max_tokens": 2048,
+            "messages": [{"role": "user", "content": prompt}]
+        });
+
+        let resp = self
+            .client
+            .post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", "2023-06-01")
+            .json(&body)
+            .timeout(std::time::Duration::from_secs(60))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            anyhow::bail!("Claude API error ({}): {}", status, text);
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json["content"][0]["text"]
+            .as_str()
+            .unwrap_or("(empty response)")
+            .to_string())
+    }
+
     fn model_name(&self) -> &str {
         "Claude"
     }

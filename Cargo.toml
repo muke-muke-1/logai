@@ -4,7 +4,9 @@ version = "0.2.0"
 edition = "2021"
 description = "AI-powered log analysis CLI — pipe your logs, get root cause analysis"
 license = "MIT"
-repository = "https://github.com/user/logai"
+repository = "https://github.com/muke-muke-1/logai"
+readme = "README.md"
+documentation = "https://docs.rs/logai"
 keywords = ["cli", "logs", "ai", "debugging", "devtools"]
 categories = ["command-line-utilities", "development-tools::debugging"]
 

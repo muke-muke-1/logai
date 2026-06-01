@@ -91,6 +91,15 @@ logai analyze app.log --model deepseek
 
 # Go deep / 深度模式 (uses stronger model / 用更强的模型)
 logai analyze app.log --deep
+
+# Watch mode / 实时监控 (periodic AI analysis as logs grow)
+logai watch app.log --window 30
+
+# Interactive TUI / 交互式终端 (browse errors, search, ask AI per-error)
+logai interactive app.log --live
+
+# Export HTML report / 导出 HTML 报告（含 Chart.js 交互图表）
+logai analyze app.log --output report.html
 ```
 
 That's it. No config file. No YAML. No "please install these 47 dependencies first."
@@ -109,6 +118,9 @@ That's it. No config file. No YAML. No "please install these 47 dependencies fir
 | 🤖 **4 AI backends** / 四个 AI 后端 | Claude, OpenAI, DeepSeek, Ollama (free!). Mix and match. |
 | 📊 **Anomaly detection** / 异常检测 | Spikes, new errors, periodic patterns — caught before AI even looks. |
 | 🎨 **Pretty terminal output** / 终端美化 | Color-coded. Tables. Code snippets. Actually readable at 2 AM. |
+| 🖥️ **Interactive TUI** / 交互式终端 | Vim keys, live refresh, search/filter, dark/light theme. Press `a` to ask AI about any error. |
+| 📈 **HTML reports** / HTML 报告 | Self-contained HTML with Chart.js — timeline, doughnut chart, bar chart. Share with the team. |
+| 👁️ **Watch mode** / 实时监听 | Point at a log file, get periodic AI analysis as new lines arrive. Ctrl+C to stop. |
 | ⚡ **One binary** / 单二进制 | No runtime. No Docker. No Python venv hell. Just one file. |
 | 🆓 **Zero config** / 零配置 | If you can type `logai analyze`, you're already using it. |
 
@@ -208,12 +220,19 @@ The magic / 魔法: Your logs **never leave your machine**. AI only receives agg
 cargo install logai
 ```
 
-### Option 2: Pre-built binaries / 预编译
+### Option 2: Homebrew
+
+```bash
+brew tap muke-muke-1/logai
+brew install logai
+```
+
+### Option 3: Pre-built binaries / 预编译
 
 Download from [GitHub Releases](https://github.com/muke-muke-1/logai/releases).  
 One file. Drop it in your `$PATH`. Done.
 
-### Option 3: Build from source / 源码编译
+### Option 4: Build from source / 源码编译
 
 ```bash
 git clone https://github.com/muke-muke-1/logai.git
@@ -235,7 +254,7 @@ export DEEPSEEK_API_KEY="sk-..."
 cargo run -- analyze tests/fixtures/json_error.log --model deepseek
 ```
 
-75 tests. 0 failures. Zero is a nice number.
+101 tests. 0 failures. Zero is a nice number.
 
 ---
 
@@ -245,11 +264,12 @@ cargo run -- analyze tests/fixtures/json_error.log --model deepseek
 - [x] Smart aggregation + dedup / 智能聚合 + 去重
 - [x] 4 AI backends / 四个 AI 后端
 - [x] Pretty terminal output / 终端美化输出
-- [ ] `logai watch` — real-time monitoring / 实时监控
-- [ ] HTML report export / HTML 报告导出
+- [x] `logai watch` — real-time monitoring / 实时监控
+- [x] HTML report export / HTML 报告导出（含 Chart.js 交互图表）
+- [x] Interactive TUI / 交互式终端界面（含 AI 对话面板）
 - [ ] Multi-source correlation / 多日志源关联分析
-- [ ] Interactive TUI / 交互式终端界面
 - [ ] Custom parsing rules / 自定义解析规则
+- [x] crates.io 发布 + Homebrew formula
 
 ---
 
