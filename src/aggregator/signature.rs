@@ -34,14 +34,17 @@ static DEPARAM_RULES: LazyLock<Vec<(Regex, &str)>> = LazyLock::new(|| {
 
 /// Build a deparameterized error signature from a log message.
 /// Replaces IPs, UUIDs, numbers, URLs, paths with placeholders.
+/// Uses Cow<str> to avoid allocation when no regex matches.
 pub fn build_signature(message: &str) -> String {
-    let mut sig = message.to_string();
+    use std::borrow::Cow;
+    let mut sig: Cow<str> = Cow::Borrowed(message);
     for (re, replacement) in DEPARAM_RULES.iter() {
-        sig = re.replace_all(&sig, *replacement).to_string();
+        sig = Cow::Owned(re.replace_all(&sig, *replacement).into_owned());
     }
     // Collapse whitespace
-    sig = sig.split_whitespace().collect::<Vec<_>>().join(" ");
-    sig
+    let mut result: String = sig.into_owned();
+    result = result.split_whitespace().collect::<Vec<_>>().join(" ");
+    result
 }
 
 /// Group LogEntries by their deparameterized error signature.

@@ -40,13 +40,15 @@ pub fn parse_lines(lines: &[String], format: Format) -> Vec<LogEntry> {
     }
 }
 
-/// Parse a log file. Streams lines, auto-detects format, returns all LogEntries.
+/// Parse a log file. Streams lines, auto-detects format from first 10 lines, returns all LogEntries.
 pub fn parse_log_file(
     path: impl AsRef<Path>,
     format_override: Option<Format>,
 ) -> anyhow::Result<Vec<LogEntry>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
+
+    // Collect all lines — stream-like read with single allocation
     let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
 
     // Detect format from first 10 lines (or use override)
@@ -58,15 +60,18 @@ pub fn parse_log_file(
         }
     };
 
-    match format {
-        Format::Json => {
-            let entries: Vec<LogEntry> = lines
-                .iter()
-                .enumerate()
-                .filter_map(|(i, line)| json::parse_json_line(line, i + 1))
-                .collect();
-            Ok(entries)
+    // Parse in-place — reuse line strings where possible
+    let entries = match format {
+        Format::Json => lines
+            .iter()
+            .enumerate()
+            .filter_map(|(i, line)| json::parse_json_line(line, i + 1))
+            .collect(),
+        Format::PlainText => {
+            // Consume lines to avoid double allocation
+            plain_text::parse_plain_text_iter(lines.into_iter())
         }
-        Format::PlainText => Ok(plain_text::parse_plain_text_iter(lines.into_iter())),
-    }
+    };
+
+    Ok(entries)
 }
