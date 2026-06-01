@@ -10,7 +10,8 @@ class Logai < Formula
   desc "AI-powered log analysis CLI — pipe your logs, get root cause analysis"
   homepage "https://github.com/muke-muke-1/logai"
   url "https://github.com/muke-muke-1/logai/archive/refs/tags/v0.2.0.tar.gz"
-  sha256 "REPLACE_WITH_ACTUAL_SHA256"
+  # Generate with: curl -sL <url> | sha256sum
+  sha256 "REPLACE_WITH_ACTUAL_SHA256_AFTER_RELEASE"
   license "MIT"
   version "0.2.0"
 
