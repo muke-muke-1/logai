@@ -16,7 +16,7 @@ use std::path::PathBuf;
 // Theme system
 // ============================================================
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Theme {
     Dark,
     Light,
@@ -57,7 +57,7 @@ impl Theme {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ThemeColors {
     pub bg: Color,
     pub fg: Color,
