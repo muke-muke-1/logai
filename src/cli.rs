@@ -20,6 +20,8 @@ pub enum Command {
     Analyze(AnalyzeArgs),
     /// 实时监听日志文件，周期性 AI 分析
     Watch(WatchArgs),
+    /// 交互式 TUI 日志浏览器
+    Interactive(InteractiveArgs),
 }
 
 #[derive(clap::Args)]
@@ -42,6 +44,10 @@ pub struct AnalyzeArgs {
     /// Minimum log level to include
     #[arg(long, default_value = "info")]
     pub min_level: LevelArg,
+
+    /// 导出报告到 HTML 文件
+    #[arg(long)]
+    pub output: Option<PathBuf>,
 }
 
 #[derive(clap::Args)]
@@ -72,6 +78,28 @@ pub struct WatchArgs {
     /// 启动时分析的最大行数（默认 10000）
     #[arg(long, default_value_t = 10000)]
     pub max_initial_lines: usize,
+}
+
+#[derive(clap::Args)]
+pub struct InteractiveArgs {
+    /// 日志文件路径
+    pub file: PathBuf,
+
+    /// 实时模式：监听文件变化，自动刷新 TUI
+    #[arg(long, default_value_t = false)]
+    pub live: bool,
+
+    /// AI 模型后端（默认自动检测）
+    #[arg(short, long, default_value = "auto")]
+    pub model: ModelArg,
+
+    /// 强制日志格式
+    #[arg(short, long, default_value = "auto")]
+    pub format: FormatArg,
+
+    /// 最低日志级别
+    #[arg(long, default_value = "info")]
+    pub min_level: LevelArg,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -182,8 +210,24 @@ pub async fn run() -> anyhow::Result<()> {
 
             let elapsed = start.elapsed().as_secs_f64();
             render_report(&summary, &response, elapsed, backend.model_name());
+
+            // HTML export
+            if let Some(ref output_path) = args.output {
+                let html = crate::renderer_html::render_report_html(
+                    &summary,
+                    &response,
+                    elapsed,
+                    backend.model_name(),
+                );
+                std::fs::write(output_path, &html)?;
+                eprintln!("   HTML 报告已保存到 {}", output_path.display());
+            }
             Ok(())
         }
         Command::Watch(args) => crate::watcher::watch_file(args).await,
+        Command::Interactive(args) => {
+            // Interactive is synchronous (TUI needs terminal control)
+            crate::tui::run_interactive(args.file, args.live)
+        }
     }
 }
