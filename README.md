@@ -235,7 +235,7 @@ export DEEPSEEK_API_KEY="sk-..."
 cargo run -- analyze tests/fixtures/json_error.log --model deepseek
 ```
 
-75 tests. 0 failures. Zero is a nice number.
+101 tests. 0 failures. Zero is a nice number.
 
 ---
 
@@ -245,11 +245,12 @@ cargo run -- analyze tests/fixtures/json_error.log --model deepseek
 - [x] Smart aggregation + dedup / 智能聚合 + 去重
 - [x] 4 AI backends / 四个 AI 后端
 - [x] Pretty terminal output / 终端美化输出
-- [ ] `logai watch` — real-time monitoring / 实时监控
-- [ ] HTML report export / HTML 报告导出
+- [x] `logai watch` — real-time monitoring / 实时监控
+- [x] HTML report export / HTML 报告导出（含 Chart.js 交互图表）
+- [x] Interactive TUI / 交互式终端界面（含 AI 对话面板）
 - [ ] Multi-source correlation / 多日志源关联分析
-- [ ] Interactive TUI / 交互式终端界面
 - [ ] Custom parsing rules / 自定义解析规则
+- [ ] crates.io 发布 + Homebrew formula
 
 ---
 

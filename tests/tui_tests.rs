@@ -1,5 +1,5 @@
 use logai::tui::{AppState, Theme};
-use logai::types::{AnalysisSummary, ErrorGroup, Trend};
+use logai::types::{AnalysisSummary, ErrorGroup, Model, Trend};
 use std::collections::HashMap;
 
 fn make_empty_summary() -> AnalysisSummary {
@@ -26,7 +26,7 @@ fn test_theme_toggle() {
 #[test]
 fn test_app_new_with_empty_summary() {
     let summary = make_empty_summary();
-    let app = AppState::new(summary);
+    let app = AppState::new(summary, Model::Auto, false);
     assert_eq!(app.selected_index, 0);
     assert_eq!(app.search_query, "");
     assert!(!app.show_help);
@@ -66,7 +66,7 @@ fn test_app_search_filters_groups() {
         },
     ];
 
-    let mut app = AppState::new(summary);
+    let mut app = AppState::new(summary, Model::Auto, false);
     assert_eq!(app.filtered_groups().len(), 3);
 
     // Search "ssl"
@@ -102,7 +102,7 @@ fn test_app_select_next_prev() {
         });
     }
 
-    let mut app = AppState::new(summary);
+    let mut app = AppState::new(summary, Model::Auto, false);
     assert_eq!(app.selected_index, 0);
 
     app.select_next();

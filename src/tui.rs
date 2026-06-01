@@ -1,6 +1,7 @@
 use crate::aggregator::aggregate;
+use crate::ai::create_backend;
 use crate::parser::{detect_format, parse_lines, parse_log_file};
-use crate::types::{AnalysisSummary, Anomaly, ErrorGroup};
+use crate::types::{AnalysisSummary, Anomaly, ErrorGroup, Model};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -72,6 +73,18 @@ pub struct ThemeColors {
 }
 
 // ============================================================
+// AI panel state
+// ============================================================
+
+#[derive(Clone, PartialEq, Eq)]
+pub enum AiPanelMode {
+    Hidden,
+    Asking,
+    Waiting,
+    ShowingResponse,
+}
+
+// ============================================================
 // Application state
 // ============================================================
 
@@ -84,10 +97,17 @@ pub struct AppState {
     pub show_help: bool,
     pub live_mode: bool,
     pub should_quit: bool,
+    // AI panel fields
+    pub ai_panel: AiPanelMode,
+    pub ai_question: String,
+    pub ai_response: String,
+    pub ai_scroll: u16,
+    pub model: Model,
+    pub deep: bool,
 }
 
 impl AppState {
-    pub fn new(summary: AnalysisSummary) -> Self {
+    pub fn new(summary: AnalysisSummary, model: Model, deep: bool) -> Self {
         let groups = summary.error_groups.clone();
         AppState {
             summary,
@@ -98,6 +118,12 @@ impl AppState {
             show_help: false,
             live_mode: false,
             should_quit: false,
+            ai_panel: AiPanelMode::Hidden,
+            ai_question: String::new(),
+            ai_response: String::new(),
+            ai_scroll: 0,
+            model,
+            deep,
         }
     }
 
@@ -158,7 +184,12 @@ impl AppState {
 // ============================================================
 
 /// Start interactive TUI
-pub fn run_interactive(file_path: PathBuf, live: bool) -> anyhow::Result<()> {
+pub fn run_interactive(
+    file_path: PathBuf,
+    live: bool,
+    model: Model,
+    deep: bool,
+) -> anyhow::Result<()> {
     // Parse log file
     let entries = parse_log_file(&file_path, None)?;
     if entries.is_empty() {
@@ -182,7 +213,7 @@ pub fn run_interactive(file_path: PathBuf, live: bool) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let mut app = AppState::new(summary);
+    let mut app = AppState::new(summary, model, deep);
     app.live_mode = live;
 
     // Live-mode state: track file position for incremental reads
@@ -239,6 +270,67 @@ pub fn run_interactive(file_path: PathBuf, live: bool) -> anyhow::Result<()> {
             }
         }
 
+        // AI panel: fire async call when user submits question
+        if app.ai_panel == AiPanelMode::Waiting {
+            let group = if app.selected_index < app.groups.len() {
+                app.groups[app.selected_index].clone()
+            } else {
+                app.ai_response = "没有选中的错误分组".to_string();
+                app.ai_panel = AiPanelMode::ShowingResponse;
+                continue;
+            };
+            let question = app.ai_question.clone();
+
+            // Build a focused prompt about this specific error group
+            let mut prompt = String::new();
+            prompt.push_str("你是一个专业的日志分析工程师。用户正在查看以下错误：\n\n");
+            prompt.push_str(&format!("错误签名: {}\n", group.signature));
+            prompt.push_str(&format!("出现次数: {}\n", group.count));
+            if let (Some(fs), Some(ls)) = (group.first_seen, group.last_seen) {
+                prompt.push_str(&format!(
+                    "时间范围: {} → {}\n",
+                    fs.format("%Y-%m-%d %H:%M:%S"),
+                    ls.format("%Y-%m-%d %H:%M:%S")
+                ));
+            }
+            prompt.push_str(&format!("趋势: {:?}\n", group.trend));
+            if !group.samples.is_empty() {
+                prompt.push_str("\n样本日志:\n");
+                for s in &group.samples {
+                    prompt.push_str(&format!("  {}\n", s));
+                }
+            }
+            if let Some(ref stack) = group.stack_trace {
+                prompt.push_str(&format!("\n堆栈跟踪:\n{}\n", stack));
+            }
+            prompt.push_str(&format!(
+                "\n用户的追问：\n{}\n\n请分析这个错误的可能原因，并提供具体的修复建议。用中文回答，直接给出分析结论，不要JSON格式。",
+                question
+            ));
+
+            // Call AI via block_in_place (TUI is sync, AI is async)
+            let result = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    let backend = create_backend(app.model, app.deep).await?;
+                    backend.chat(&prompt).await
+                })
+            });
+
+            match result {
+                Ok(response) => {
+                    app.ai_response = response;
+                }
+                Err(e) => {
+                    app.ai_response = format!(
+                        "❌ AI 调用失败: {}\n\n请确认已设置对应的 API Key 环境变量。",
+                        e
+                    );
+                }
+            }
+            app.ai_panel = AiPanelMode::ShowingResponse;
+            app.ai_scroll = 0;
+        }
+
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
@@ -266,6 +358,53 @@ fn handle_key_event(key: event::KeyEvent, app: &mut AppState) {
         return;
     }
 
+    // AI panel key handling takes priority
+    match app.ai_panel {
+        AiPanelMode::Asking => {
+            match key.code {
+                KeyCode::Esc => {
+                    app.ai_panel = AiPanelMode::Hidden;
+                    app.ai_question.clear();
+                }
+                KeyCode::Enter => {
+                    if !app.ai_question.trim().is_empty() {
+                        app.ai_panel = AiPanelMode::Waiting;
+                    }
+                }
+                KeyCode::Backspace => {
+                    let _ = app.ai_question.pop();
+                }
+                KeyCode::Char(c) => {
+                    app.ai_question.push(c);
+                }
+                _ => {}
+            }
+            return;
+        }
+        AiPanelMode::Waiting => {
+            // Block all input while waiting
+            return;
+        }
+        AiPanelMode::ShowingResponse => {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    app.ai_panel = AiPanelMode::Hidden;
+                    app.ai_response.clear();
+                    app.ai_scroll = 0;
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    app.ai_scroll = app.ai_scroll.saturating_add(1);
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    app.ai_scroll = app.ai_scroll.saturating_sub(1);
+                }
+                _ => {}
+            }
+            return;
+        }
+        AiPanelMode::Hidden => { /* fall through to normal keys */ }
+    }
+
     match key.code {
         KeyCode::Char('q') => app.should_quit = true,
         KeyCode::Esc => app.should_quit = true,
@@ -273,6 +412,12 @@ fn handle_key_event(key: event::KeyEvent, app: &mut AppState) {
         KeyCode::Down | KeyCode::Char('j') => app.select_next(),
         KeyCode::Char('t') => app.theme.toggle(),
         KeyCode::Char('?') => app.show_help = true,
+        KeyCode::Char('a') => {
+            app.ai_panel = AiPanelMode::Asking;
+            app.ai_question.clear();
+            app.ai_response.clear();
+            app.ai_scroll = 0;
+        }
         KeyCode::Char('/') => {
             app.search_query.clear();
         }
@@ -320,6 +465,11 @@ fn render_ui(f: &mut Frame, app: &AppState) {
     // --- Help popup (if active) ---
     if app.show_help {
         render_help_popup(f, app, &colors);
+    }
+
+    // --- AI panel popup (if active) ---
+    if app.ai_panel != AiPanelMode::Hidden {
+        render_ai_panel(f, app, &colors);
     }
 }
 
@@ -542,7 +692,7 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
         Span::styled(search_str, Style::default().fg(colors.highlight)),
         Span::styled(theme_str, Style::default().fg(colors.info)),
         Span::styled(
-            "  j/k down/up  / search  t theme  ? help  q quit",
+            "  j/k down/up  / search  t theme  a ask-ai  ? help  q quit",
             Style::default().fg(colors.border),
         ),
     ]);
@@ -581,6 +731,13 @@ fn render_help_popup(f: &mut Frame, _app: &AppState, colors: &ThemeColors) {
             Span::styled("Toggle dark/light theme", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
+            Span::styled("  a          ", Style::default().fg(colors.highlight)),
+            Span::styled(
+                "Ask AI about selected error",
+                Style::default().fg(colors.fg),
+            ),
+        ]),
+        Line::from(vec![
             Span::styled("  ?          ", Style::default().fg(colors.highlight)),
             Span::styled("Show/hide this help", Style::default().fg(colors.fg)),
         ]),
@@ -602,6 +759,140 @@ fn render_help_popup(f: &mut Frame, _app: &AppState, colors: &ThemeColors) {
         ),
         popup_area,
     );
+}
+
+// ============================================================
+// AI panel rendering
+// ============================================================
+
+fn render_ai_panel(f: &mut Frame, app: &AppState, colors: &ThemeColors) {
+    let popup_area = centered_rect(70, 70, f.area());
+    f.render_widget(Clear, popup_area);
+
+    match app.ai_panel {
+        AiPanelMode::Asking => {
+            let cursor = if app.ai_question.is_empty() {
+                "█".to_string()
+            } else {
+                "".to_string()
+            };
+            let text = vec![
+                Line::from(vec![Span::styled(
+                    "🤖 向 AI 追问根因",
+                    Style::default().fg(colors.highlight).bold(),
+                )]),
+                Line::from(""),
+                Line::from(vec![Span::styled(
+                    "输入你的问题，按 Enter 提交，Esc 取消",
+                    Style::default().fg(colors.border),
+                )]),
+                Line::from(""),
+                Line::from(vec![Span::styled(
+                    format!("> {}{}", app.ai_question, cursor),
+                    Style::default().fg(colors.fg),
+                )]),
+            ];
+
+            f.render_widget(
+                Paragraph::new(Text::from(text))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(colors.highlight))
+                            .title(" AI 追问 ")
+                            .style(Style::default().bg(colors.selected)),
+                    )
+                    .wrap(Wrap { trim: true }),
+                popup_area,
+            );
+        }
+        AiPanelMode::Waiting => {
+            let text = vec![
+                Line::from(vec![Span::styled(
+                    "🤖 正在分析...",
+                    Style::default().fg(colors.highlight).bold(),
+                )]),
+                Line::from(""),
+                Line::from(vec![Span::styled(
+                    "请稍候，AI 正在分析你选中的错误...",
+                    Style::default().fg(colors.fg),
+                )]),
+            ];
+
+            f.render_widget(
+                Paragraph::new(Text::from(text))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(colors.warn))
+                            .title(" AI 分析中 ")
+                            .style(Style::default().bg(colors.selected)),
+                    )
+                    .wrap(Wrap { trim: true }),
+                popup_area,
+            );
+        }
+        AiPanelMode::ShowingResponse => {
+            let mut lines: Vec<Line> = vec![
+                Line::from(vec![Span::styled(
+                    "🤖 AI 分析结果",
+                    Style::default().fg(colors.highlight).bold(),
+                )]),
+                Line::from(""),
+            ];
+
+            // Add response lines, scrolled
+            let display_lines: Vec<&str> = app.ai_response.lines().collect();
+            let max_scroll = display_lines
+                .len()
+                .saturating_sub(popup_area.height.saturating_sub(6) as usize);
+            let scroll = (app.ai_scroll as usize).min(max_scroll);
+            let visible = &display_lines[scroll..];
+
+            for line in visible
+                .iter()
+                .take(popup_area.height.saturating_sub(6) as usize)
+            {
+                lines.push(Line::from(vec![Span::styled(
+                    *line,
+                    Style::default().fg(colors.fg),
+                )]));
+            }
+
+            // Scroll indicator
+            if max_scroll > 0 {
+                lines.push(Line::from(""));
+                lines.push(Line::from(vec![Span::styled(
+                    format!(
+                        "--- {}/{} (j/k 滚动, q/Esc 关闭) ---",
+                        scroll + 1,
+                        max_scroll + 1
+                    ),
+                    Style::default().fg(colors.border),
+                )]));
+            } else {
+                lines.push(Line::from(""));
+                lines.push(Line::from(vec![Span::styled(
+                    "按 q/Esc 关闭",
+                    Style::default().fg(colors.border),
+                )]));
+            }
+
+            f.render_widget(
+                Paragraph::new(Text::from(lines))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(colors.highlight))
+                            .title(" AI 回答 ")
+                            .style(Style::default().bg(colors.selected)),
+                    )
+                    .wrap(Wrap { trim: true }),
+                popup_area,
+            );
+        }
+        AiPanelMode::Hidden => { /* unreachable */ }
+    }
 }
 
 // ============================================================

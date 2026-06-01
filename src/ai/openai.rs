@@ -57,6 +57,39 @@ impl AiBackend for OpenAiBackend {
         parse_ai_response(&content)
     }
 
+    async fn chat(&self, prompt: &str) -> anyhow::Result<String> {
+        let model = self.actual_model(self.deep);
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "你是一个专业的日志分析工程师。用中文回答。"},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.3
+        });
+
+        let resp = self
+            .client
+            .post("https://api.openai.com/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&body)
+            .timeout(std::time::Duration::from_secs(60))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            anyhow::bail!("OpenAI API error ({}): {}", status, text);
+        }
+
+        let json: serde_json::Value = resp.json().await?;
+        Ok(json["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or("(empty response)")
+            .to_string())
+    }
+
     fn model_name(&self) -> &str {
         "OpenAI"
     }

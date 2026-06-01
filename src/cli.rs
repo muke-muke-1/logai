@@ -93,6 +93,10 @@ pub struct InteractiveArgs {
     #[arg(short, long, default_value = "auto")]
     pub model: ModelArg,
 
+    /// 使用深度/更强模型进行分析
+    #[arg(long, default_value_t = false)]
+    pub deep: bool,
+
     /// 强制日志格式
     #[arg(short, long, default_value = "auto")]
     pub format: FormatArg,
@@ -221,7 +225,8 @@ pub async fn run() -> anyhow::Result<()> {
         Command::Watch(args) => crate::watcher::watch_file(args).await,
         Command::Interactive(args) => {
             // Interactive is synchronous (TUI needs terminal control)
-            crate::tui::run_interactive(args.file, args.live)
+            let model: Model = args.model.into();
+            crate::tui::run_interactive(args.file, args.live, model, args.deep)
         }
     }
 }

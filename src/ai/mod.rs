@@ -11,6 +11,9 @@ use std::env;
 #[async_trait]
 pub trait AiBackend: Send + Sync {
     async fn analyze(&self, summary: &AnalysisSummary) -> anyhow::Result<AiResponse>;
+    /// Send a free-form chat prompt and return the text response.
+    /// Used by TUI AI panel for interactive Q&A.
+    async fn chat(&self, prompt: &str) -> anyhow::Result<String>;
     fn model_name(&self) -> &str;
     fn actual_model(&self, deep: bool) -> &str;
 }

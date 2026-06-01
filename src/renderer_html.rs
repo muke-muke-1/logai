@@ -1,8 +1,9 @@
 use crate::types::{
     AiResponse, AnalysisSummary, ErrorGroup, FixSuggestion, Level, RootCause, Severity,
 };
+use std::collections::BTreeMap;
 
-/// Generate a self-contained HTML analysis report
+/// Generate a self-contained HTML analysis report with Chart.js interactive charts
 pub fn render_report_html(
     summary: &AnalysisSummary,
     response: &AiResponse,
@@ -24,6 +25,9 @@ pub fn render_report_html(
     let fix_suggestions_html = render_fix_suggestions_html(&response.fix_suggestions);
     let groups_html = render_error_groups_html(&summary.error_groups);
 
+    // Build Chart.js data
+    let chart_data = build_chart_data(summary);
+
     format!(
         r#"<!DOCTYPE html>
 <html lang="zh-CN">
@@ -31,6 +35,7 @@ pub fn render_report_html(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{title}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
   body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; background: #1a1a2e; color: #e0e0e0; }}
   h1 {{ color: #e94560; border-bottom: 2px solid #0f3460; padding-bottom: 12px; }}
@@ -40,6 +45,11 @@ pub fn render_report_html(
   .stat {{ background: #16213e; border-radius: 8px; padding: 16px 24px; text-align: center; }}
   .stat .value {{ font-size: 28px; font-weight: bold; color: #e94560; }}
   .stat .label {{ font-size: 12px; color: #aaa; margin-top: 4px; }}
+  .charts {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }}
+  .charts .wide {{ grid-column: 1 / -1; }}
+  .chart-box {{ background: #16213e; border-radius: 8px; padding: 16px; }}
+  .chart-box h3 {{ color: #aaa; font-size: 13px; margin: 0 0 12px 0; }}
+  .chart-box canvas {{ max-height: 280px; }}
   .root-cause {{ background: #16213e; border-left: 4px solid #e94560; padding: 16px; margin-bottom: 16px; border-radius: 0 8px 8px 0; }}
   .root-cause h3 {{ margin-top: 0; color: #e94560; }}
   .evidence {{ color: #aaa; font-size: 13px; margin: 8px 0; }}
@@ -72,6 +82,22 @@ pub fn render_report_html(
   <div class="stat"><div class="value">{group_count}</div><div class="label">错误分组</div></div>
 </div>
 
+<h2>📈 交互图表</h2>
+<div class="charts">
+  <div class="chart-box wide">
+    <h3>错误趋势（时间线）</h3>
+    <canvas id="timelineChart"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>日志级别分布</h3>
+    <canvas id="levelPieChart"></canvas>
+  </div>
+  <div class="chart-box">
+    <h3>TOP 错误分组</h3>
+    <canvas id="groupsBarChart"></canvas>
+  </div>
+</div>
+
 <h2>🔴 根因分析</h2>
 {root_causes_html}
 
@@ -82,6 +108,10 @@ pub fn render_report_html(
 {groups_html}
 
 <div class="footer">由 logai 生成 · 日志数据未上传 · 仅 AI 看到聚合统计</div>
+
+<script>
+{chart_js}
+</script>
 </body>
 </html>"#,
         title = title,
@@ -96,7 +126,208 @@ pub fn render_report_html(
         root_causes_html = root_causes_html,
         fix_suggestions_html = fix_suggestions_html,
         groups_html = groups_html,
+        chart_js = chart_data,
     )
+}
+
+/// Build Chart.js JavaScript for interactive charts
+fn build_chart_data(summary: &AnalysisSummary) -> String {
+    // --- Level distribution data ---
+    let level_order = [
+        Level::Error,
+        Level::Warn,
+        Level::Info,
+        Level::Debug,
+        Level::Trace,
+    ];
+    let level_colors = ["#e94560", "#f0a500", "#16c79a", "#4a9eff", "#666"];
+    let level_labels: Vec<&str> = level_order
+        .iter()
+        .filter(|l| summary.level_distribution.get(l).unwrap_or(&0) > &0)
+        .map(|l| match l {
+            Level::Error => "ERROR",
+            Level::Warn => "WARN",
+            Level::Info => "INFO",
+            Level::Debug => "DEBUG",
+            Level::Trace => "TRACE",
+            Level::Unknown => "UNKNOWN",
+        })
+        .collect();
+    let level_counts: Vec<usize> = level_order
+        .iter()
+        .filter(|l| summary.level_distribution.get(l).unwrap_or(&0) > &0)
+        .map(|l| *summary.level_distribution.get(l).unwrap_or(&0))
+        .collect();
+
+    // --- Top error groups bar data ---
+    let top_n = 10usize.min(summary.error_groups.len());
+    let bar_labels: Vec<String> = summary.error_groups[..top_n]
+        .iter()
+        .map(|g| {
+            let s = if g.signature.len() > 40 {
+                format!("{}...", &g.signature[..37])
+            } else {
+                g.signature.clone()
+            };
+            escape_js_str(&s)
+        })
+        .collect();
+    let bar_counts: Vec<usize> = summary.error_groups[..top_n]
+        .iter()
+        .map(|g| g.count)
+        .collect();
+
+    // --- Timeline: bucket error group first_seen times into windows ---
+    let (timeline_labels, timeline_counts) = build_timeline_data(summary);
+
+    format!(
+        r#"// Level distribution pie chart
+const levelCtx = document.getElementById('levelPieChart').getContext('2d');
+new Chart(levelCtx, {{
+  type: 'doughnut',
+  data: {{
+    labels: [{level_labels}],
+    datasets: [{{
+      data: [{level_counts}],
+      backgroundColor: [{level_bg}],
+      borderColor: '#1a1a2e',
+      borderWidth: 2
+    }}]
+  }},
+  options: {{
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {{ legend: {{ labels: {{ color: '#aaa' }} }} }}
+  }}
+}});
+
+// Top error groups bar chart
+const barCtx = document.getElementById('groupsBarChart').getContext('2d');
+new Chart(barCtx, {{
+  type: 'bar',
+  data: {{
+    labels: [{bar_labels}],
+    datasets: [{{
+      label: '出现次数',
+      data: [{bar_counts}],
+      backgroundColor: '#e94560',
+      borderRadius: 4
+    }}]
+  }},
+  options: {{
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {{ legend: {{ display: false }} }},
+    scales: {{
+      x: {{ ticks: {{ color: '#aaa' }}, grid: {{ color: '#2a2a4e' }} }},
+      y: {{ ticks: {{ color: '#aaa', font: {{ size: 10 }} }}, grid: {{ display: false }} }}
+    }}
+  }}
+}});
+
+// Timeline chart
+const timeCtx = document.getElementById('timelineChart').getContext('2d');
+new Chart(timeCtx, {{
+  type: 'line',
+  data: {{
+    labels: [{timeline_labels}],
+    datasets: [{{
+      label: '错误数 / 窗口',
+      data: [{timeline_counts}],
+      borderColor: '#e94560',
+      backgroundColor: 'rgba(233, 69, 96, 0.15)',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 3,
+      pointBackgroundColor: '#e94560'
+    }}]
+  }},
+  options: {{
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {{ legend: {{ labels: {{ color: '#aaa' }} }} }},
+    scales: {{
+      x: {{ ticks: {{ color: '#aaa', maxTicksLimit: 12 }}, grid: {{ color: '#2a2a4e' }} }},
+      y: {{ ticks: {{ color: '#aaa' }}, grid: {{ color: '#2a2a4e' }}, beginAtZero: true }}
+    }}
+  }}
+}});"#,
+        level_labels = level_labels
+            .iter()
+            .map(|l| format!("'{}'", l))
+            .collect::<Vec<_>>()
+            .join(","),
+        level_counts = level_counts
+            .iter()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(","),
+        level_bg = level_colors[..level_labels.len()]
+            .iter()
+            .map(|c| format!("'{}'", c))
+            .collect::<Vec<_>>()
+            .join(","),
+        bar_labels = bar_labels
+            .iter()
+            .map(|l| format!("'{}'", l))
+            .collect::<Vec<_>>()
+            .join(","),
+        bar_counts = bar_counts
+            .iter()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(","),
+        timeline_labels = timeline_labels
+            .iter()
+            .map(|l| format!("'{}'", l))
+            .collect::<Vec<_>>()
+            .join(","),
+        timeline_counts = timeline_counts
+            .iter()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(","),
+    )
+}
+
+/// Build timeline data by bucketing error group first_seen timestamps
+fn build_timeline_data(summary: &AnalysisSummary) -> (Vec<String>, Vec<usize>) {
+    let mut bucket_map: BTreeMap<i64, usize> = BTreeMap::new();
+    let window_secs: i64 = 300; // 5-minute windows
+
+    for group in &summary.error_groups {
+        if let Some(ts) = group.first_seen {
+            let bucket = ts.timestamp() / window_secs;
+            *bucket_map.entry(bucket).or_insert(0) += group.count;
+        }
+    }
+
+    // If no timestamps, return empty
+    if bucket_map.is_empty() {
+        return (vec![], vec![]);
+    }
+
+    let labels: Vec<String> = bucket_map
+        .keys()
+        .map(|&bucket| {
+            let ts = bucket * window_secs;
+            let dt = chrono::DateTime::<chrono::Utc>::from_timestamp(ts, 0)
+                .unwrap_or(chrono::DateTime::UNIX_EPOCH);
+            dt.format("%H:%M").to_string()
+        })
+        .collect();
+    let counts: Vec<usize> = bucket_map.values().copied().collect();
+
+    (labels, counts)
+}
+
+/// Escape a string for safe inclusion in JavaScript single-quoted string
+fn escape_js_str(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('\n', " ")
+        .replace('\r', "")
 }
 
 fn render_root_causes_html(causes: &[RootCause]) -> String {
