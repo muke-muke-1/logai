@@ -1,4 +1,6 @@
-use crate::types::{AiResponse, AnalysisSummary, ErrorGroup, FixSuggestion, Level, RootCause, Severity};
+use crate::types::{
+    AiResponse, AnalysisSummary, ErrorGroup, FixSuggestion, Level, RootCause, Severity,
+};
 
 /// Generate a self-contained HTML analysis report
 pub fn render_report_html(
@@ -14,14 +16,8 @@ pub fn render_report_html(
     };
 
     let total = summary.total_lines.max(1) as f64;
-    let error_count = summary
-        .level_distribution
-        .get(&Level::Error)
-        .unwrap_or(&0);
-    let warn_count = summary
-        .level_distribution
-        .get(&Level::Warn)
-        .unwrap_or(&0);
+    let error_count = summary.level_distribution.get(&Level::Error).unwrap_or(&0);
+    let warn_count = summary.level_distribution.get(&Level::Warn).unwrap_or(&0);
     let error_rate = *error_count as f64 / total * 100.0;
 
     let root_causes_html = render_root_causes_html(&response.root_causes);

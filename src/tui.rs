@@ -121,7 +121,11 @@ impl AppState {
             return;
         }
         if let Some(pos) = filtered.iter().position(|&i| i == self.selected_index) {
-            let new_pos = if pos == 0 { filtered.len() - 1 } else { pos - 1 };
+            let new_pos = if pos == 0 {
+                filtered.len() - 1
+            } else {
+                pos - 1
+            };
             self.selected_index = filtered[new_pos];
         } else {
             self.selected_index = filtered[0];
@@ -135,7 +139,11 @@ impl AppState {
             return;
         }
         if let Some(pos) = filtered.iter().position(|&i| i == self.selected_index) {
-            let new_pos = if pos + 1 >= filtered.len() { 0 } else { pos + 1 };
+            let new_pos = if pos + 1 >= filtered.len() {
+                0
+            } else {
+                pos + 1
+            };
             self.selected_index = filtered[new_pos];
         } else {
             self.selected_index = filtered[0];
@@ -266,7 +274,11 @@ fn render_group_list(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
         .iter()
         .map(|&idx| {
             let g = &app.groups[idx];
-            let marker = if idx == app.selected_index { "▶ " } else { "  " };
+            let marker = if idx == app.selected_index {
+                "▶ "
+            } else {
+                "  "
+            };
             let count_style = if g.count > 100 {
                 Style::default().fg(colors.error).bold()
             } else {
@@ -317,7 +329,8 @@ fn render_group_list(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
 }
 
 fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeColors) {
-    let empty_text = Text::from("选择一个错误分组查看详情\n\n← → ↑ ↓ 移动  / 搜索  t 主题  ? 帮助  q 退出");
+    let empty_text =
+        Text::from("选择一个错误分组查看详情\n\n← → ↑ ↓ 移动  / 搜索  t 主题  ? 帮助  q 退出");
 
     if app.groups.is_empty() || app.selected_index >= app.groups.len() {
         let p = Paragraph::new(empty_text)
@@ -349,14 +362,10 @@ fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &Theme
             } if *group_index == app.selected_index => {
                 Some(format!("Spike ({}x average)", multiplier))
             }
-            Anomaly::NewError { group_index }
-                if *group_index == app.selected_index =>
-            {
+            Anomaly::NewError { group_index } if *group_index == app.selected_index => {
                 Some("New error".to_string())
             }
-            Anomaly::SilentRecovery { group_index }
-                if *group_index == app.selected_index =>
-            {
+            Anomaly::SilentRecovery { group_index } if *group_index == app.selected_index => {
                 Some("Silent recovery".to_string())
             }
             Anomaly::PeriodicPattern {
@@ -467,7 +476,11 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
         Span::styled(mode_str, Style::default().fg(colors.error).bold()),
         Span::styled(" | ", Style::default().fg(colors.border)),
         Span::styled(
-            format!("{} groups / {} anomalies", app.groups.len(), app.summary.anomalies.len()),
+            format!(
+                "{} groups / {} anomalies",
+                app.groups.len(),
+                app.summary.anomalies.len()
+            ),
             Style::default().fg(colors.fg),
         ),
         Span::styled(" | ", Style::default().fg(colors.border)),
@@ -525,14 +538,13 @@ fn render_help_popup(f: &mut Frame, _app: &AppState, colors: &ThemeColors) {
     let popup_area = centered_rect(50, 60, f.area());
     f.render_widget(Clear, popup_area);
     f.render_widget(
-        Paragraph::new(Text::from(help_text))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(colors.highlight))
-                    .title(" Help ")
-                    .style(Style::default().bg(colors.selected)),
-            ),
+        Paragraph::new(Text::from(help_text)).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(colors.highlight))
+                .title(" Help ")
+                .style(Style::default().bg(colors.selected)),
+        ),
         popup_area,
     );
 }
