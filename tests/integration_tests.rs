@@ -112,3 +112,30 @@ fn test_watch_shows_flags_in_help() {
     assert!(stdout.contains("--min-level"));
     assert!(stdout.contains("--format"));
 }
+
+#[test]
+fn test_interactive_help() {
+    let mut cmd = Command::cargo_bin("logai").unwrap();
+    cmd.arg("interactive").arg("--help");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("交互式 TUI 日志浏览器"));
+}
+
+#[test]
+fn test_interactive_live_flag_in_help() {
+    let mut cmd = Command::cargo_bin("logai").unwrap();
+    cmd.arg("interactive").arg("--help");
+    let output = cmd.output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--live"));
+}
+
+#[test]
+fn test_analyze_output_flag_in_help() {
+    let mut cmd = Command::cargo_bin("logai").unwrap();
+    cmd.arg("analyze").arg("--help");
+    let output = cmd.output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("--output"));
+}
