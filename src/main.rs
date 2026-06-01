@@ -4,6 +4,7 @@ pub mod cli;
 pub mod parser;
 pub mod renderer;
 pub mod renderer_html;
+pub mod tui;
 pub mod types;
 pub mod watcher;
 
