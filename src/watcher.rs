@@ -3,7 +3,7 @@ use crate::ai::{create_backend, with_retry};
 use crate::cli::WatchArgs;
 use crate::parser::{detect_format, parse_lines};
 use crate::renderer::render_report;
-use crate::types::{Level, LogEntry, Model};
+use crate::types::{LogEntry, Model};
 use notify::{Event, RecursiveMode, Watcher};
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
@@ -80,13 +80,7 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
     let initial_lines = read_last_n_lines(&file_path, args.max_initial_lines)?;
     let initial_entries = parse_lines(&initial_lines, format);
     let min_level = args.min_level.to_level();
-    let mut entries: Vec<LogEntry> = initial_entries
-        .into_iter()
-        .filter(|e| {
-            let level = e.level.unwrap_or(Level::Unknown);
-            level.severity() <= min_level.severity()
-        })
-        .collect();
+    let mut entries = crate::types::filter_by_level(initial_entries, min_level);
 
     eprintln!("   已解析 {} 条日志", entries.len());
 
@@ -116,10 +110,7 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
 
     let mut last_position = std::fs::metadata(&file_path)?.len();
     let window = args.window;
-    let _start_time = Instant::now();
     let mut analysis_count: u32 = 1;
-    let mut _alert_count: u32 = summary.anomalies.len() as u32;
-    let mut _total_lines: u64 = entries.len() as u64;
     let mut pending_entries: Vec<LogEntry> = Vec::new();
 
     // notify 事件通过 std mpsc 接收，桥接到 tokio mpsc 供 select! 使用
@@ -148,12 +139,10 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
                 if !pending_entries.is_empty() {
                     let new_line_count = pending_entries.len();
                     entries.append(&mut pending_entries);
-                    _total_lines += new_line_count as u64;
 
                     let tick_start = Instant::now();
                     let summary = aggregate(&entries);
-                    let anomalies_this_tick = summary.anomalies.len() as u32;
-                    _alert_count += anomalies_this_tick;
+                    let anomalies_this_tick = summary.anomalies.len();
 
                     if anomalies_this_tick > 0 {
                         eprintln!(
@@ -182,6 +171,11 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
                 }
             }
 
+            _ = tokio::signal::ctrl_c() => {
+                eprintln!("\n🛑 收到中断信号，正在关闭...");
+                break;
+            }
+
             _ = async_rx.recv() => {
                 match std::fs::metadata(&file_path) {
                     Ok(metadata) => {
@@ -200,16 +194,8 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
                             entries.clear();
                             if let Ok(restored) = read_last_n_lines(&file_path, args.max_initial_lines) {
                                 let parsed = parse_lines(&restored, format);
-                                let filtered: Vec<LogEntry> = parsed
-                                    .into_iter()
-                                    .filter(|e| {
-                                        let level = e.level.unwrap_or(Level::Unknown);
-                                        level.severity() <= min_level.severity()
-                                    })
-                                    .collect();
-                                entries = filtered;
+                                entries = crate::types::filter_by_level(parsed, min_level);
                                 last_position = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(last_position);
-                                _total_lines = entries.len() as u64;
                             }
                         } else if current_size > last_position {
                             if let Ok((new_lines, new_position)) =
@@ -217,14 +203,7 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
                             {
                                 if !new_lines.is_empty() {
                                     let parsed = parse_lines(&new_lines, format);
-                                    let filtered: Vec<LogEntry> = parsed
-                                        .into_iter()
-                                        .filter(|e| {
-                                            let level = e.level.unwrap_or(Level::Unknown);
-                                            level.severity() <= min_level.severity()
-                                        })
-                                        .collect();
-                                    pending_entries.extend(filtered);
+                                    pending_entries.extend(crate::types::filter_by_level(parsed, min_level));
                                 }
                                 last_position = new_position;
                             }
@@ -245,4 +224,9 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
             }
         }
     }
+
+    // Graceful shutdown: drop the watcher to stop filesystem events
+    drop(watcher);
+    eprintln!("✅ 监听已停止");
+    Ok(())
 }
