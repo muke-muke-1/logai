@@ -86,11 +86,20 @@ export OPENAI_API_KEY="sk-..."     # 🏢 enterprise vibes / 企业范
 # Analyze / 分析
 logai analyze app.log
 
+# Multi-source / 多源关联 (cross-file correlation)
+logai analyze app.log db.log nginx.log
+
 # Choose model / 指定模型
 logai analyze app.log --model deepseek
 
 # Go deep / 深度模式 (uses stronger model / 用更强的模型)
 logai analyze app.log --deep
+
+# Analyze then browse in TUI / 分析后进入交互式浏览器
+logai analyze app.log --tui
+
+# TUI with multi-source / 多源 TUI (Tab 键切换来源)
+logai analyze app.log db.log --tui
 
 # Watch mode / 实时监控 (periodic AI analysis as logs grow)
 logai watch app.log --window 30
@@ -98,8 +107,13 @@ logai watch app.log --window 30
 # Interactive TUI / 交互式终端 (browse errors, search, ask AI per-error)
 logai interactive app.log --live
 
-# Export HTML report / 导出 HTML 报告（含 Chart.js 交互图表）
+# Export HTML report / 导出 HTML 报告（含 Chart.js 交互图表 + 亮/暗主题）
 logai analyze app.log --output report.html
+
+# Custom parse rules / 自定义解析规则
+logai analyze app.log --parse-timestamp-format "%Y-%m-%d %H:%M:%S" --parse-level-field severity
+# Or via config file / 或者用配置文件
+logai analyze app.log --rules-file logai.toml
 ```
 
 That's it. No config file. No YAML. No "please install these 47 dependencies first."
@@ -117,10 +131,13 @@ That's it. No config file. No YAML. No "please install these 47 dependencies fir
 | 🔒 **Privacy-first** / 隐私优先 | Your raw logs stay on your machine. AI only sees aggregated stats. No PII leakage. |
 | 🤖 **4 AI backends** / 四个 AI 后端 | Claude, OpenAI, DeepSeek, Ollama (free!). Mix and match. |
 | 📊 **Anomaly detection** / 异常检测 | Spikes, new errors, periodic patterns — caught before AI even looks. |
-| 🎨 **Pretty terminal output** / 终端美化 | Color-coded. Tables. Code snippets. Actually readable at 2 AM. |
+| 🔗 **Multi-source correlation** / 多源关联 | Analyze multiple log files together. Cross-source causal chains. Tab between sources in TUI. |
+| 🎨 **Pretty terminal output** / 终端美化 | Color-coded. Tables. Code snippets. Auto-adapts to narrow terminals (< 80 cols). |
 | 🖥️ **Interactive TUI** / 交互式终端 | Vim keys, live refresh, search/filter, dark/light theme. Press `a` to ask AI about any error. |
-| 📈 **HTML reports** / HTML 报告 | Self-contained HTML with Chart.js — timeline, doughnut chart, bar chart. Share with the team. |
+| 📈 **HTML reports** / HTML 报告 | Self-contained HTML with Chart.js + light/dark theme toggle. Google Fonts. Mobile responsive. |
 | 👁️ **Watch mode** / 实时监听 | Point at a log file, get periodic AI analysis as new lines arrive. Ctrl+C to stop. |
+| 🛠️ **Custom parse rules** / 自定义解析 | Override timestamp format, level field, message field via CLI flags or `logai.toml`. |
+| 🔄 **AI retry** / AI 重试 | 3x exponential backoff (1s→2s→4s). No more one-shot API failures. |
 | ⚡ **One binary** / 单二进制 | No runtime. No Docker. No Python venv hell. Just one file. |
 | 🆓 **Zero config** / 零配置 | If you can type `logai analyze`, you're already using it. |
 
@@ -267,9 +284,15 @@ cargo run -- analyze tests/fixtures/json_error.log --model deepseek
 - [x] `logai watch` — real-time monitoring / 实时监控
 - [x] HTML report export / HTML 报告导出（含 Chart.js 交互图表）
 - [x] Interactive TUI / 交互式终端界面（含 AI 对话面板）
-- [ ] Multi-source correlation / 多日志源关联分析
-- [ ] Custom parsing rules / 自定义解析规则
+- [x] Multi-source correlation / 多日志源关联分析
+- [x] Custom parsing rules / 自定义解析规则
+- [x] HTML dark/light theme + Google Fonts / HTML 亮暗主题
+- [x] Terminal width responsive / 终端宽度自适应
+- [x] AI retry with exponential backoff / AI 指数退避重试
 - [x] crates.io 发布 + Homebrew formula
+- [ ] CI/CD integration (`logai ci`) / CI/CD 集成
+- [ ] Diff analysis (`logai diff`) / 变更差异分析
+- [ ] JSON output (`--json`) / JSON 格式输出
 
 ---
 
