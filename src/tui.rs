@@ -1,5 +1,5 @@
 use crate::aggregator::aggregate;
-use crate::ai::create_backend;
+use crate::ai::{create_backend, with_retry};
 use crate::parser::{detect_format, parse_lines, parse_log_file};
 use crate::types::{AnalysisSummary, Anomaly, ErrorGroup, Model};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -104,6 +104,7 @@ pub struct AppState {
     pub ai_scroll: u16,
     pub model: Model,
     pub deep: bool,
+    pub stack_expanded: bool,
 }
 
 impl AppState {
@@ -124,6 +125,7 @@ impl AppState {
             ai_scroll: 0,
             model,
             deep,
+            stack_expanded: false,
         }
     }
 
@@ -312,7 +314,14 @@ pub fn run_interactive(
             let result = tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
                     let backend = create_backend(app.model, app.deep).await?;
-                    backend.chat(&prompt).await
+                    with_retry(
+                        || backend.chat(&prompt),
+                        |_n, _e| {
+                            // TUI is blocked during AI call — retry progress
+                            // is captured in the final result instead.
+                        },
+                    )
+                    .await
                 })
             });
 
@@ -322,7 +331,7 @@ pub fn run_interactive(
                 }
                 Err(e) => {
                     app.ai_response = format!(
-                        "❌ AI 调用失败: {}\n\n请确认已设置对应的 API Key 环境变量。",
+                        "❌ AI 调用失败（已重试 3 次）: {}\n\n请确认已设置对应的 API Key 环境变量。",
                         e
                     );
                 }
@@ -423,6 +432,9 @@ fn handle_key_event(key: event::KeyEvent, app: &mut AppState) {
         }
         KeyCode::Backspace => {
             let _ = app.search_query.pop();
+        }
+        KeyCode::Enter => {
+            app.stack_expanded = !app.stack_expanded;
         }
         KeyCode::Char(c) => {
             app.search_query.push(c);
@@ -535,7 +547,7 @@ fn render_group_list(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
 
 fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeColors) {
     let empty_text =
-        Text::from("选择一个错误分组查看详情\n\n← → ↑ ↓ 移动  / 搜索  t 主题  ? 帮助  q 退出");
+        Text::from("选择一个错误分组查看详情\n\nj/k 移动  / 搜索  t 主题  ? 帮助  q 退出");
 
     if app.groups.is_empty() || app.selected_index >= app.groups.len() {
         let p = Paragraph::new(empty_text)
@@ -565,69 +577,67 @@ fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &Theme
                 group_index,
                 multiplier,
             } if *group_index == app.selected_index => {
-                Some(format!("Spike ({}x average)", multiplier))
+                Some(format!("突增 ({}x 平均值)", multiplier))
             }
             Anomaly::NewError { group_index } if *group_index == app.selected_index => {
-                Some("New error".to_string())
+                Some("新错误".to_string())
             }
             Anomaly::SilentRecovery { group_index } if *group_index == app.selected_index => {
-                Some("Silent recovery".to_string())
+                Some("静默恢复".to_string())
             }
             Anomaly::PeriodicPattern {
                 group_index,
                 period_minutes,
             } if *group_index == app.selected_index => {
-                Some(format!("Periodic (~{}min)", period_minutes))
+                Some(format!("周期性 (~{}分钟)", period_minutes))
             }
             _ => None,
         })
         .collect::<Vec<_>>();
 
-    let mut lines = vec![
-        Line::from(vec![
-            Span::styled("Signature: ", Style::default().fg(colors.border)),
-            Span::styled(&g.signature, Style::default().fg(colors.error).bold()),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("Count: ", Style::default().fg(colors.border)),
-            Span::styled(
-                format!("{}", g.count),
-                Style::default().fg(colors.highlight),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("Time range: ", Style::default().fg(colors.border)),
-            Span::styled(time_str, Style::default().fg(colors.fg)),
-        ]),
-    ];
+    // === NEW ORDER: 错误签名 → 元数据 → 异常 → 样本 → 堆栈(可折叠) ===
 
-    // Trend (always present, not optional)
+    let mut lines = vec![];
+
+    // 1. Error signature — most important, prominent
+    lines.push(Line::from(vec![
+        Span::styled(
+            &g.signature,
+            Style::default().fg(colors.error).bold(),
+        ),
+    ]));
     lines.push(Line::from(""));
+
+    // 2. Compact metadata: count + time + trend in one visual block
+    lines.push(Line::from(vec![
+        Span::styled(
+            format!("出现 {} 次", g.count),
+            Style::default().fg(colors.highlight),
+        ),
+        Span::styled("  |  ", Style::default().fg(colors.border)),
+        Span::styled(time_str, Style::default().fg(colors.fg)),
+    ]));
     lines.push(Line::from(vec![Span::styled(
-        format!("Trend: {:?}", g.trend),
+        format!("趋势: {:?}", g.trend),
         Style::default().fg(colors.info),
     )]));
 
+    // 3. Anomalies (if any)
     if !anomaly_info.is_empty() {
         lines.push(Line::from(""));
-        lines.push(Line::from(vec![Span::styled(
-            "--- Anomalies ---",
-            Style::default().fg(colors.warn).bold(),
-        )]));
         for a in &anomaly_info {
             lines.push(Line::from(vec![Span::styled(
-                a,
+                format!("⚠ {}", a),
                 Style::default().fg(colors.warn),
             )]));
         }
     }
 
-    // Sample lines
+    // 4. Samples — evidence
     if !g.samples.is_empty() {
         lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled(
-            "--- Samples ---",
+            "── 原始日志 ──",
             Style::default().fg(colors.border),
         )]));
         for sample in g.samples.iter().take(5) {
@@ -638,17 +648,35 @@ fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &Theme
         }
     }
 
-    // Stack trace
+    // 5. Stack trace — collapsible with Enter
     if let Some(ref stack) = g.stack_trace {
         lines.push(Line::from(""));
+        let collapse_hint = if app.stack_expanded {
+            "── 堆栈跟踪 (Enter 折叠) ──"
+        } else {
+            "── 堆栈跟踪 (Enter 展开) ──"
+        };
         lines.push(Line::from(vec![Span::styled(
-            "--- Stack Trace ---",
+            collapse_hint,
             Style::default().fg(colors.border),
         )]));
-        for stack_line in stack.lines().take(10) {
+
+        let stack_lines: Vec<&str> = stack.lines().collect();
+        let show_count = if app.stack_expanded {
+            stack_lines.len()
+        } else {
+            stack_lines.len().min(3)
+        };
+        for stack_line in stack_lines.iter().take(show_count) {
             lines.push(Line::from(vec![Span::styled(
                 truncate_str(stack_line, area.width.saturating_sub(4) as usize),
                 Style::default().fg(Color::DarkGray),
+            )]));
+        }
+        if !app.stack_expanded && stack_lines.len() > 3 {
+            lines.push(Line::from(vec![Span::styled(
+                format!("... 还有 {} 行，按 Enter 展开", stack_lines.len() - 3),
+                Style::default().fg(colors.border),
             )]));
         }
     }
@@ -666,15 +694,15 @@ fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &Theme
 }
 
 fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeColors) {
-    let mode_str = if app.live_mode { "LIVE" } else { "STATIC" };
+    let mode_str = if app.live_mode { "实时" } else { "静态" };
     let theme_str = match app.theme {
-        Theme::Dark => " Dark",
-        Theme::Light => " Light",
+        Theme::Dark => " 暗色",
+        Theme::Light => " 亮色",
     };
     let search_str = if app.search_query.is_empty() {
         String::new()
     } else {
-        format!("Search: \"{}\"  ", app.search_query)
+        format!("搜索: \"{}\"  ", app.search_query)
     };
 
     let status = Line::from(vec![
@@ -682,7 +710,7 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
         Span::styled(" | ", Style::default().fg(colors.border)),
         Span::styled(
             format!(
-                "{} groups / {} anomalies",
+                "{} 个分组 / {} 个异常",
                 app.groups.len(),
                 app.summary.anomalies.len()
             ),
@@ -692,7 +720,7 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
         Span::styled(search_str, Style::default().fg(colors.highlight)),
         Span::styled(theme_str, Style::default().fg(colors.info)),
         Span::styled(
-            "  j/k down/up  / search  t theme  a ask-ai  ? help  q quit",
+            "  j/k 移动  / 搜索  t 主题  a AI问答  ? 帮助  q 退出",
             Style::default().fg(colors.border),
         ),
     ]);
@@ -706,44 +734,45 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
 fn render_help_popup(f: &mut Frame, _app: &AppState, colors: &ThemeColors) {
     let help_text = vec![
         Line::from(vec![Span::styled(
-            "Keyboard Shortcuts",
+            "按键说明",
             Style::default().fg(colors.highlight).bold(),
         )]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  j / Down   ", Style::default().fg(colors.highlight)),
-            Span::styled("Move down", Style::default().fg(colors.fg)),
+            Span::styled("  j / ↓       ", Style::default().fg(colors.highlight)),
+            Span::styled("向下移动", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  k / Up     ", Style::default().fg(colors.highlight)),
-            Span::styled("Move up", Style::default().fg(colors.fg)),
+            Span::styled("  k / ↑       ", Style::default().fg(colors.highlight)),
+            Span::styled("向上移动", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  /          ", Style::default().fg(colors.highlight)),
-            Span::styled("Search filter groups", Style::default().fg(colors.fg)),
+            Span::styled("  /           ", Style::default().fg(colors.highlight)),
+            Span::styled("搜索过滤分组", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  Backspace  ", Style::default().fg(colors.highlight)),
-            Span::styled("Delete last search char", Style::default().fg(colors.fg)),
+            Span::styled("  Backspace   ", Style::default().fg(colors.highlight)),
+            Span::styled("删除搜索字符", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  t          ", Style::default().fg(colors.highlight)),
-            Span::styled("Toggle dark/light theme", Style::default().fg(colors.fg)),
+            Span::styled("  t           ", Style::default().fg(colors.highlight)),
+            Span::styled("切换暗色/亮色主题", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  a          ", Style::default().fg(colors.highlight)),
-            Span::styled(
-                "Ask AI about selected error",
-                Style::default().fg(colors.fg),
-            ),
+            Span::styled("  Enter       ", Style::default().fg(colors.highlight)),
+            Span::styled("展开/折叠堆栈跟踪", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  ?          ", Style::default().fg(colors.highlight)),
-            Span::styled("Show/hide this help", Style::default().fg(colors.fg)),
+            Span::styled("  a           ", Style::default().fg(colors.highlight)),
+            Span::styled("向 AI 追问选中错误", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  q / Esc    ", Style::default().fg(colors.highlight)),
-            Span::styled("Quit", Style::default().fg(colors.fg)),
+            Span::styled("  ?           ", Style::default().fg(colors.highlight)),
+            Span::styled("显示/隐藏帮助", Style::default().fg(colors.fg)),
+        ]),
+        Line::from(vec![
+            Span::styled("  q / Esc     ", Style::default().fg(colors.highlight)),
+            Span::styled("退出", Style::default().fg(colors.fg)),
         ]),
     ];
 
@@ -754,7 +783,7 @@ fn render_help_popup(f: &mut Frame, _app: &AppState, colors: &ThemeColors) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(colors.highlight))
-                .title(" Help ")
+                .title(" 帮助 ")
                 .style(Style::default().bg(colors.selected)),
         ),
         popup_area,
