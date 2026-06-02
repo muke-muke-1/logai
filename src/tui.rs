@@ -104,6 +104,7 @@ pub struct AppState {
     pub ai_scroll: u16,
     pub model: Model,
     pub deep: bool,
+    pub stack_expanded: bool,
 }
 
 impl AppState {
@@ -124,6 +125,7 @@ impl AppState {
             ai_scroll: 0,
             model,
             deep,
+            stack_expanded: false,
         }
     }
 
@@ -424,6 +426,9 @@ fn handle_key_event(key: event::KeyEvent, app: &mut AppState) {
         KeyCode::Backspace => {
             let _ = app.search_query.pop();
         }
+        KeyCode::Enter => {
+            app.stack_expanded = !app.stack_expanded;
+        }
         KeyCode::Char(c) => {
             app.search_query.push(c);
         }
@@ -535,7 +540,7 @@ fn render_group_list(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
 
 fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeColors) {
     let empty_text =
-        Text::from("选择一个错误分组查看详情\n\n← → ↑ ↓ 移动  / 搜索  t 主题  ? 帮助  q 退出");
+        Text::from("选择一个错误分组查看详情\n\nj/k 移动  / 搜索  t 主题  ? 帮助  q 退出");
 
     if app.groups.is_empty() || app.selected_index >= app.groups.len() {
         let p = Paragraph::new(empty_text)
@@ -565,69 +570,67 @@ fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &Theme
                 group_index,
                 multiplier,
             } if *group_index == app.selected_index => {
-                Some(format!("Spike ({}x average)", multiplier))
+                Some(format!("突增 ({}x 平均值)", multiplier))
             }
             Anomaly::NewError { group_index } if *group_index == app.selected_index => {
-                Some("New error".to_string())
+                Some("新错误".to_string())
             }
             Anomaly::SilentRecovery { group_index } if *group_index == app.selected_index => {
-                Some("Silent recovery".to_string())
+                Some("静默恢复".to_string())
             }
             Anomaly::PeriodicPattern {
                 group_index,
                 period_minutes,
             } if *group_index == app.selected_index => {
-                Some(format!("Periodic (~{}min)", period_minutes))
+                Some(format!("周期性 (~{}分钟)", period_minutes))
             }
             _ => None,
         })
         .collect::<Vec<_>>();
 
-    let mut lines = vec![
-        Line::from(vec![
-            Span::styled("Signature: ", Style::default().fg(colors.border)),
-            Span::styled(&g.signature, Style::default().fg(colors.error).bold()),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("Count: ", Style::default().fg(colors.border)),
-            Span::styled(
-                format!("{}", g.count),
-                Style::default().fg(colors.highlight),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("Time range: ", Style::default().fg(colors.border)),
-            Span::styled(time_str, Style::default().fg(colors.fg)),
-        ]),
-    ];
+    // === NEW ORDER: 错误签名 → 元数据 → 异常 → 样本 → 堆栈(可折叠) ===
 
-    // Trend (always present, not optional)
+    let mut lines = vec![];
+
+    // 1. Error signature — most important, prominent
+    lines.push(Line::from(vec![
+        Span::styled(
+            &g.signature,
+            Style::default().fg(colors.error).bold(),
+        ),
+    ]));
     lines.push(Line::from(""));
+
+    // 2. Compact metadata: count + time + trend in one visual block
+    lines.push(Line::from(vec![
+        Span::styled(
+            format!("出现 {} 次", g.count),
+            Style::default().fg(colors.highlight),
+        ),
+        Span::styled("  |  ", Style::default().fg(colors.border)),
+        Span::styled(time_str, Style::default().fg(colors.fg)),
+    ]));
     lines.push(Line::from(vec![Span::styled(
-        format!("Trend: {:?}", g.trend),
+        format!("趋势: {:?}", g.trend),
         Style::default().fg(colors.info),
     )]));
 
+    // 3. Anomalies (if any)
     if !anomaly_info.is_empty() {
         lines.push(Line::from(""));
-        lines.push(Line::from(vec![Span::styled(
-            "--- Anomalies ---",
-            Style::default().fg(colors.warn).bold(),
-        )]));
         for a in &anomaly_info {
             lines.push(Line::from(vec![Span::styled(
-                a,
+                format!("⚠ {}", a),
                 Style::default().fg(colors.warn),
             )]));
         }
     }
 
-    // Sample lines
+    // 4. Samples — evidence
     if !g.samples.is_empty() {
         lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled(
-            "--- Samples ---",
+            "── 原始日志 ──",
             Style::default().fg(colors.border),
         )]));
         for sample in g.samples.iter().take(5) {
@@ -638,17 +641,35 @@ fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &Theme
         }
     }
 
-    // Stack trace
+    // 5. Stack trace — collapsible with Enter
     if let Some(ref stack) = g.stack_trace {
         lines.push(Line::from(""));
+        let collapse_hint = if app.stack_expanded {
+            "── 堆栈跟踪 (Enter 折叠) ──"
+        } else {
+            "── 堆栈跟踪 (Enter 展开) ──"
+        };
         lines.push(Line::from(vec![Span::styled(
-            "--- Stack Trace ---",
+            collapse_hint,
             Style::default().fg(colors.border),
         )]));
-        for stack_line in stack.lines().take(10) {
+
+        let stack_lines: Vec<&str> = stack.lines().collect();
+        let show_count = if app.stack_expanded {
+            stack_lines.len()
+        } else {
+            stack_lines.len().min(3)
+        };
+        for stack_line in stack_lines.iter().take(show_count) {
             lines.push(Line::from(vec![Span::styled(
                 truncate_str(stack_line, area.width.saturating_sub(4) as usize),
                 Style::default().fg(Color::DarkGray),
+            )]));
+        }
+        if !app.stack_expanded && stack_lines.len() > 3 {
+            lines.push(Line::from(vec![Span::styled(
+                format!("... 还有 {} 行，按 Enter 展开", stack_lines.len() - 3),
+                Style::default().fg(colors.border),
             )]));
         }
     }
