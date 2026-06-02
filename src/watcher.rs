@@ -101,7 +101,10 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
         backend.model_name(),
         backend.actual_model(deep)
     );
-    let response = with_retry(|| backend.analyze(&summary)).await?;
+    let response = with_retry(|| backend.analyze(&summary), |n, e| {
+        eprintln!("   ⚠️  第 {n} 次尝试失败: {e}，重试中...");
+    })
+    .await?;
     render_report(&summary, &response, 0.0, backend.model_name());
 
     println!("\n--- 正在监听新日志 (窗口: {}秒) ---", args.window);
@@ -151,7 +154,11 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
                         );
                     }
 
-                    match with_retry(|| backend.analyze(&summary)).await {
+                    match with_retry(|| backend.analyze(&summary), |n, e| {
+                        eprintln!("   ⚠️  第 {n} 次尝试失败: {e}，重试中...");
+                    })
+                    .await
+                    {
                         Ok(response) => {
                             let elapsed = tick_start.elapsed().as_secs_f64();
                             analysis_count += 1;

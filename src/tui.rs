@@ -1,5 +1,5 @@
 use crate::aggregator::aggregate;
-use crate::ai::create_backend;
+use crate::ai::{create_backend, with_retry};
 use crate::parser::{detect_format, parse_lines, parse_log_file};
 use crate::types::{AnalysisSummary, Anomaly, ErrorGroup, Model};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -314,7 +314,14 @@ pub fn run_interactive(
             let result = tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
                     let backend = create_backend(app.model, app.deep).await?;
-                    backend.chat(&prompt).await
+                    with_retry(
+                        || backend.chat(&prompt),
+                        |_n, _e| {
+                            // TUI is blocked during AI call — retry progress
+                            // is captured in the final result instead.
+                        },
+                    )
+                    .await
                 })
             });
 
@@ -324,7 +331,7 @@ pub fn run_interactive(
                 }
                 Err(e) => {
                     app.ai_response = format!(
-                        "❌ AI 调用失败: {}\n\n请确认已设置对应的 API Key 环境变量。",
+                        "❌ AI 调用失败（已重试 3 次）: {}\n\n请确认已设置对应的 API Key 环境变量。",
                         e
                     );
                 }

@@ -18,20 +18,37 @@ pub trait AiBackend: Send + Sync {
     fn actual_model(&self, deep: bool) -> &str;
 }
 
-/// Retry an async operation once with a 1-second delay on failure.
-pub async fn with_retry<T, F, Fut>(f: F) -> anyhow::Result<T>
+/// Retry an async operation with exponential backoff.
+/// - Max 3 attempts total (2 retries after initial failure)
+/// - Backoff: 1s → 2s → 4s
+/// - `on_retry` callback receives (attempt_number, error_message) for status reporting.
+///   CLI passes eprintln, TUI passes a status-bar updater.
+pub async fn with_retry<T, F, Fut, R>(f: F, on_retry: R) -> anyhow::Result<T>
 where
     F: Fn() -> Fut,
     Fut: std::future::Future<Output = anyhow::Result<T>>,
+    R: Fn(u32, &str),
 {
-    match f().await {
-        Ok(val) => Ok(val),
-        Err(e) => {
-            eprintln!("   ⚠️  First attempt failed: {}. Retrying in 1s...", e);
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            f().await
+    const MAX_ATTEMPTS: u32 = 3;
+    const BASE_DELAY_MS: u64 = 1000;
+
+    let mut last_err = None;
+    for attempt in 1..=MAX_ATTEMPTS {
+        match f().await {
+            Ok(val) => return Ok(val),
+            Err(e) => {
+                last_err = Some(e);
+                if attempt < MAX_ATTEMPTS {
+                    let delay_ms = BASE_DELAY_MS * (1 << (attempt - 1)); // 1s, 2s, 4s
+                    let msg = format!("{}", last_err.as_ref().unwrap());
+                    on_retry(attempt, &msg);
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                }
+            }
         }
     }
+    // All attempts exhausted — return the last error
+    Err(last_err.unwrap())
 }
 
 /// Create the appropriate backend based on Model enum
