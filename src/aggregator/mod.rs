@@ -3,7 +3,7 @@ pub mod bucketer;
 pub mod signature;
 pub mod token_budget;
 
-use crate::types::{AnalysisSummary, Anomaly, ErrorGroup, Level, LogEntry};
+use crate::types::{AnalysisSummary, Anomaly, Correlation, ErrorGroup, Level, LogEntry, SourceAnalysis};
 use std::collections::HashMap;
 
 /// Full aggregation pipeline: LogEntry list → AnalysisSummary
@@ -131,4 +131,91 @@ pub fn aggregate(entries: &[LogEntry]) -> AnalysisSummary {
         time_start,
         time_end,
     )
+}
+
+/// Detect cross-source correlations based on time overlap and error signature similarity.
+pub fn detect_cross_correlations(sources: &[SourceAnalysis]) -> Vec<Correlation> {
+    let mut correlations = Vec::new();
+
+    for i in 0..sources.len() {
+        for j in (i + 1)..sources.len() {
+            let a = &sources[i];
+            let b = &sources[j];
+
+            // Correlation 1: Error burst overlap in time windows
+            if let (Some(a_start), Some(a_end), Some(b_start), Some(b_end)) = (
+                a.summary.time_start,
+                a.summary.time_end,
+                b.summary.time_start,
+                b.summary.time_end,
+            ) {
+                let overlap_start = if a_start > b_start { a_start } else { b_start };
+                let overlap_end = if a_end < b_end { a_end } else { b_end };
+                let overlap_dur = (overlap_end - overlap_start).num_seconds();
+                let total_dur = (if a_end > b_end { a_end } else { b_end }
+                    - if a_start < b_start { a_start } else { b_start })
+                .num_seconds();
+
+                if total_dur > 0 {
+                    let time_overlap = overlap_dur.max(0) as f64 / total_dur as f64;
+                    if time_overlap > 0.5 {
+                        correlations.push(Correlation {
+                            source_a: a.name.clone(),
+                            source_b: b.name.clone(),
+                            score: time_overlap as f32,
+                            description: format!(
+                                "时间窗口高度重叠 ({:.0}%)，{} 与 {} 的错误可能由同一事件触发",
+                                time_overlap * 100.0,
+                                a.name,
+                                b.name
+                            ),
+                        });
+                    }
+                }
+            }
+
+            // Correlation 2: Similar error rate patterns
+            let a_errors = *a
+                .summary
+                .level_distribution
+                .get(&Level::Error)
+                .unwrap_or(&0) as f64;
+            let b_errors = *b
+                .summary
+                .level_distribution
+                .get(&Level::Error)
+                .unwrap_or(&0) as f64;
+            let a_total = a.summary.total_lines.max(1) as f64;
+            let b_total = b.summary.total_lines.max(1) as f64;
+
+            let a_rate = a_errors / a_total;
+            let b_rate = b_errors / b_total;
+
+            let rate_similarity = if a_rate.max(b_rate) > 0.0 {
+                1.0 - (a_rate - b_rate).abs() / a_rate.max(b_rate)
+            } else {
+                0.0
+            };
+
+            if rate_similarity > 0.5 && a_errors > 0.0 && b_errors > 0.0 {
+                correlations.push(Correlation {
+                    source_a: a.name.clone(),
+                    source_b: b.name.clone(),
+                    score: rate_similarity as f32,
+                    description: format!(
+                        "错误率相似 ({:.0}% vs {:.0}%)，{} 与 {} 可能受相同根因影响",
+                        a_rate * 100.0,
+                        b_rate * 100.0,
+                        a.name,
+                        b.name
+                    ),
+                });
+            }
+        }
+    }
+
+    // Sort by score descending, keep top 5
+    correlations.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+    correlations.truncate(5);
+    correlations
 }
