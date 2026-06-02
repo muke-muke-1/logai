@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1] - 2026-06-01
+
+### Changed
+- TUI detail panel reordered: error signature most prominent, metadata compact, stack trace collapsible via Enter
+- AI retry with 3x exponential backoff (1s/2s/4s) and callback reporter for CLI/TUI compatibility
+- All user-facing strings unified to Chinese: status bar, help popup, anomaly labels
+
 ## [0.2.0] - 2026-06-01
 
 ### Added

@@ -5,18 +5,18 @@
 
 ## P1 — v0.3 必须交付
 
-- [ ] **T1: TUI 详情面板信息优先级重排** (人工 ~20min / CC ~5min)
+- [x] **T1: TUI 详情面板信息优先级重排** (人工 ~20min / CC ~5min)
   - 渲染顺序: 根因摘要 → 修复建议(前2条) → 元数据(次数+时间) → 堆栈(Enter 折叠)
   - 文件: `src/tui.rs`
   - 验证: `cargo test tui_tests`
 
-- [ ] **T2: AI 调用自动重试 + 友好错误信息** (人工 ~1h / CC ~10min)
+- [x] **T2: AI 调用自动重试 + 友好错误信息** (人工 ~1h / CC ~10min)
   - CLI: 3 次指数退避重试，失败后显示检查建议 (API key/网络)
   - TUI: 错误显示在对话框中，支持按键重试
   - 文件: `src/ai/mod.rs`, `src/tui.rs`
   - 验证: `cargo test ai_tests`
 
-- [ ] **T3: 统一中文化所有用户可见字符串** (人工 ~30min / CC ~10min)
+- [x] **T3: 统一中文化所有用户可见字符串** (人工 ~30min / CC ~10min)
   - TUI 状态栏、帮助面板、空状态提示全部改为中文
   - 代码标识符保持英文
   - 文件: `src/tui.rs`, `src/renderer.rs`, `src/renderer_html.rs`
