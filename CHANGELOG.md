@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0] - 2026-06-02
+
+### Added
+- `analyze --tui`: open interactive TUI browser after analysis, reusing pre-parsed data
+- HTML theme toggle: light/dark switch with Google Fonts (Inter, Noto Sans SC, JetBrains Mono)
+- DESIGN.md: unified color tokens mapping between TUI `ThemeColors` and HTML CSS variables
+- Terminal width detection: `< 80` column mode simplifies output, TUI layout adapts responsively
+- Custom parse config: `--parse-*` CLI flags, `logai.toml` auto-loading, `--rules-file` support
+- Multi-source correlation: `logai analyze app.log db.log` — per-source analysis + cross-source correlation
+- Multi-source TUI: Tab key cycles between sources, correlation panel shows cross-source links
+- Parse config priority: CLI flags > config file > auto-detect
+
+### Changed
+- `logai analyze` now accepts multiple file arguments (backward compatible — single file still works)
+- TUI status bar and layout adapt to narrow terminals (< 80 columns)
+- HTML report uses CSS custom properties for theming, responsive breakpoints at 900px/700px
+- New dependency: `toml` for config file parsing
+
 ## [0.2.1] - 2026-06-01
 
 ### Changed

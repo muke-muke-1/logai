@@ -35,42 +35,144 @@ pub fn render_report_html(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=Noto+Sans+SC:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; background: #1a1a2e; color: #e0e0e0; }}
-  h1 {{ color: #e94560; border-bottom: 2px solid #0f3460; padding-bottom: 12px; }}
-  h2 {{ color: #16c79a; margin-top: 32px; }}
-  .meta {{ color: #aaa; font-size: 14px; margin-bottom: 24px; }}
-  .overview {{ display: flex; gap: 24px; margin-bottom: 32px; }}
-  .stat {{ background: #16213e; border-radius: 8px; padding: 16px 24px; text-align: center; }}
-  .stat .value {{ font-size: 28px; font-weight: bold; color: #e94560; }}
-  .stat .label {{ font-size: 12px; color: #aaa; margin-top: 4px; }}
+  /* ======== Color tokens (aligned with TUI ThemeColors) ======== */
+  :root {{
+    --color-bg: #1a1a2e;
+    --color-fg: #e0e0e0;
+    --color-highlight: #00bcd4;
+    --color-error: #e94560;
+    --color-warn: #f0a500;
+    --color-info: #16c79a;
+    --color-selected: #16213e;
+    --color-border: #0f3460;
+    --color-code-bg: #0d1b3e;
+    --color-muted: #888;
+    --shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }}
+  [data-theme="light"] {{
+    --color-bg: #fafafa;
+    --color-fg: #1a1a2e;
+    --color-highlight: #1565c0;
+    --color-error: #c62828;
+    --color-warn: #e65100;
+    --color-info: #2e7d32;
+    --color-selected: #e8eaf6;
+    --color-border: #c5cae9;
+    --color-code-bg: #eceff1;
+    --color-muted: #666;
+    --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }}
+
+  /* ======== Base ======== */
+  *, *::before, *::after {{ box-sizing: border-box; }}
+  body {{
+    font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 960px; margin: 0 auto; padding: 24px;
+    background: var(--color-bg); color: var(--color-fg);
+    transition: background 0.3s, color 0.3s;
+  }}
+  h1 {{ color: var(--color-error); border-bottom: 2px solid var(--color-border); padding-bottom: 12px; }}
+  h2 {{ color: var(--color-info); margin-top: 32px; }}
+  .meta {{ color: var(--color-muted); font-size: 14px; margin-bottom: 24px; }}
+
+  /* ======== Theme toggle ======== */
+  .theme-toggle {{
+    position: fixed; top: 16px; right: 24px; z-index: 100;
+    background: var(--color-selected); color: var(--color-fg);
+    border: 1px solid var(--color-border); border-radius: 20px;
+    padding: 6px 14px; cursor: pointer; font-size: 13px;
+    font-family: inherit; transition: all 0.2s;
+    box-shadow: var(--shadow);
+  }}
+  .theme-toggle:hover {{ filter: brightness(1.1); }}
+
+  /* ======== Overview stats ======== */
+  .overview {{ display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }}
+  .stat {{
+    background: var(--color-selected); border-radius: 8px;
+    padding: 16px 24px; text-align: center; box-shadow: var(--shadow);
+  }}
+  .stat .value {{ font-size: 28px; font-weight: bold; color: var(--color-error); }}
+  .stat .label {{ font-size: 12px; color: var(--color-muted); margin-top: 4px; }}
+
+  /* ======== Charts ======== */
   .charts {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }}
   .charts .wide {{ grid-column: 1 / -1; }}
-  .chart-box {{ background: #16213e; border-radius: 8px; padding: 16px; }}
-  .chart-box h3 {{ color: #aaa; font-size: 13px; margin: 0 0 12px 0; }}
+  .chart-box {{
+    background: var(--color-selected); border-radius: 8px;
+    padding: 16px; box-shadow: var(--shadow);
+  }}
+  .chart-box h3 {{ color: var(--color-muted); font-size: 13px; margin: 0 0 12px 0; }}
   .chart-box canvas {{ max-height: 280px; }}
-  .root-cause {{ background: #16213e; border-left: 4px solid #e94560; padding: 16px; margin-bottom: 16px; border-radius: 0 8px 8px 0; }}
-  .root-cause h3 {{ margin-top: 0; color: #e94560; }}
-  .evidence {{ color: #aaa; font-size: 13px; margin: 8px 0; }}
+
+  /* ======== Root cause cards ======== */
+  .root-cause {{
+    background: var(--color-selected); border-left: 4px solid var(--color-error);
+    padding: 16px; margin-bottom: 16px; border-radius: 0 8px 8px 0;
+    box-shadow: var(--shadow);
+  }}
+  .root-cause h3 {{ margin-top: 0; color: var(--color-error); }}
+  .evidence {{ color: var(--color-muted); font-size: 13px; margin: 8px 0; }}
   .evidence li {{ margin: 4px 0; }}
   .severity {{ font-size: 12px; padding: 2px 8px; border-radius: 4px; }}
-  .severity.critical {{ background: #e94560; color: white; }}
-  .severity.high {{ background: #e94560aa; color: white; }}
-  .severity.medium {{ background: #f0a500; color: #1a1a2e; }}
-  .severity.low {{ background: #16c79a; color: #1a1a2e; }}
-  .fix {{ background: #16213e; border-left: 4px solid #16c79a; padding: 16px; margin-bottom: 12px; border-radius: 0 8px 8px 0; }}
-  .fix code {{ background: #0f3460; padding: 8px 12px; display: block; margin-top: 8px; border-radius: 4px; font-family: 'Fira Code', monospace; font-size: 13px; }}
-  .group {{ background: #16213e; padding: 12px 16px; margin-bottom: 8px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }}
-  .group .sig {{ font-family: monospace; font-size: 13px; }}
-  .group .count {{ color: #e94560; font-weight: bold; }}
-  .footer {{ color: #555; font-size: 12px; margin-top: 48px; border-top: 1px solid #0f3460; padding-top: 16px; text-align: center; }}
-  .bar {{ display: inline-block; height: 16px; border-radius: 3px; margin-right: 8px; vertical-align: middle; }}
-  .bar.error {{ background: #e94560; }}
-  .bar.warn {{ background: #f0a500; }}
+  .severity.critical {{ background: var(--color-error); color: white; }}
+  .severity.high {{ background: color-mix(in srgb, var(--color-error) 70%, transparent); color: white; }}
+  .severity.medium {{ background: var(--color-warn); color: #1a1a2e; }}
+  .severity.low {{ background: var(--color-info); color: #1a1a2e; }}
+
+  /* ======== Fix suggestions ======== */
+  .fix {{
+    background: var(--color-selected); border-left: 4px solid var(--color-info);
+    padding: 16px; margin-bottom: 12px; border-radius: 0 8px 8px 0;
+    box-shadow: var(--shadow);
+  }}
+  .fix code {{
+    background: var(--color-code-bg); padding: 8px 12px; display: block;
+    margin-top: 8px; border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+  }}
+
+  /* ======== Error groups ======== */
+  .group {{
+    background: var(--color-selected); padding: 12px 16px;
+    margin-bottom: 8px; border-radius: 8px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 8px; box-shadow: var(--shadow);
+  }}
+  .group .sig {{ font-family: 'JetBrains Mono', 'Consolas', monospace; font-size: 13px; }}
+  .group .count {{ color: var(--color-error); font-weight: bold; }}
+
+  /* ======== Footer ======== */
+  .footer {{
+    color: var(--color-muted); font-size: 12px; margin-top: 48px;
+    border-top: 1px solid var(--color-border); padding-top: 16px; text-align: center;
+  }}
+
+  /* ======== Responsive ======== */
+  @media (max-width: 900px) {{
+    .charts {{ grid-template-columns: 1fr; }}
+    .overview {{ gap: 16px; }}
+  }}
+  @media (max-width: 700px) {{
+    body {{ padding: 12px; }}
+    .overview {{ gap: 12px; }}
+    .stat {{ padding: 12px 16px; flex: 1 1 40%; }}
+    .stat .value {{ font-size: 22px; }}
+    .charts canvas {{ max-height: 220px; }}
+    .group {{ flex-direction: column; align-items: flex-start; }}
+    .theme-toggle {{ top: 8px; right: 12px; padding: 4px 10px; font-size: 12px; }}
+  }}
 </style>
 </head>
-<body>
+<body data-theme="dark">
+<button class="theme-toggle" onclick="toggleTheme()" title="切换亮色/暗色主题">🌓 主题</button>
+
 <h1>📊 {title}</h1>
 <div class="meta">{total_lines} 行 · {time_info} · 耗时 {elapsed:.1}s · AI: {model_name}</div>
 
@@ -110,6 +212,42 @@ pub fn render_report_html(
 <div class="footer">由 logai 生成 · 日志数据未上传 · 仅 AI 看到聚合统计</div>
 
 <script>
+// Theme toggle
+function toggleTheme() {{
+  const el = document.documentElement;
+  const current = el.getAttribute('data-theme');
+  const next = current === 'light' ? 'dark' : 'light';
+  el.setAttribute('data-theme', next);
+  // Re-render charts with new theme colors
+  updateChartColors(next);
+}}
+
+function getChartColors(theme) {{
+  const style = getComputedStyle(document.documentElement);
+  return {{
+    grid: theme === 'light' ? '#ddd' : '#2a2a4e',
+    text: style.getPropertyValue('--color-muted').trim() || '#888',
+    error: style.getPropertyValue('--color-error').trim() || '#e94560',
+    info: style.getPropertyValue('--color-info').trim() || '#16c79a',
+    warn: style.getPropertyValue('--color-warn').trim() || '#f0a500',
+  }};
+}}
+
+let charts = {{}};
+function updateChartColors(theme) {{
+  const c = getChartColors(theme);
+  Object.values(charts).forEach(ch => {{
+    if (ch.options && ch.options.scales) {{
+      if (ch.options.scales.x) {{ ch.options.scales.x.grid = {{ color: c.grid }}; ch.options.scales.x.ticks = {{ color: c.text }}; }}
+      if (ch.options.scales.y) {{ ch.options.scales.y.grid = {{ color: c.grid }}; ch.options.scales.y.ticks = {{ color: c.text }}; }}
+    }}
+    if (ch.options && ch.options.plugins && ch.options.plugins.legend) {{
+      ch.options.plugins.legend.labels = {{ color: c.text }};
+    }}
+    ch.update();
+  }});
+}}
+
 {chart_js}
 </script>
 </body>
@@ -183,7 +321,7 @@ fn build_chart_data(summary: &AnalysisSummary) -> String {
     format!(
         r#"// Level distribution pie chart
 const levelCtx = document.getElementById('levelPieChart').getContext('2d');
-new Chart(levelCtx, {{
+charts.level = new Chart(levelCtx, {{
   type: 'doughnut',
   data: {{
     labels: [{level_labels}],
@@ -203,7 +341,7 @@ new Chart(levelCtx, {{
 
 // Top error groups bar chart
 const barCtx = document.getElementById('groupsBarChart').getContext('2d');
-new Chart(barCtx, {{
+charts.bar = new Chart(barCtx, {{
   type: 'bar',
   data: {{
     labels: [{bar_labels}],
@@ -228,7 +366,7 @@ new Chart(barCtx, {{
 
 // Timeline chart
 const timeCtx = document.getElementById('timelineChart').getContext('2d');
-new Chart(timeCtx, {{
+charts.timeline = new Chart(timeCtx, {{
   type: 'line',
   data: {{
     labels: [{timeline_labels}],

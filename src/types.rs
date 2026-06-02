@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// 日志级别
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -58,6 +59,37 @@ pub fn filter_by_level(entries: Vec<LogEntry>, min_level: Level) -> Vec<LogEntry
 pub enum Format {
     Json,
     PlainText,
+}
+
+/// 自定义解析配置
+/// Priority: CLI flags > config file > auto-detect
+#[derive(Debug, Clone, Default)]
+pub struct ParseConfig {
+    /// Custom timestamp format string (e.g. "%Y-%m-%d %H:%M:%S")
+    pub timestamp_format: Option<String>,
+    /// JSON field name for log level (e.g. "severity", "level")
+    pub level_field: Option<String>,
+    /// JSON field name for the message body (e.g. "message", "msg")
+    pub message_field: Option<String>,
+    /// Plain-text regex pattern for log level extraction
+    pub level_pattern: Option<String>,
+    /// Marker string that signals a stack trace continuation line
+    pub stack_trace_marker: Option<String>,
+}
+
+impl ParseConfig {
+    /// Create ParseConfig by merging CLI flags over file config
+    pub fn merge(cli: Option<ParseConfig>, file: Option<ParseConfig>) -> Self {
+        let file = file.unwrap_or_default();
+        let cli = cli.unwrap_or_default();
+        ParseConfig {
+            timestamp_format: cli.timestamp_format.or(file.timestamp_format),
+            level_field: cli.level_field.or(file.level_field),
+            message_field: cli.message_field.or(file.message_field),
+            level_pattern: cli.level_pattern.or(file.level_pattern),
+            stack_trace_marker: cli.stack_trace_marker.or(file.stack_trace_marker),
+        }
+    }
 }
 
 /// 一条解析后的日志
@@ -164,4 +196,59 @@ pub enum Model {
     DeepSeek,
     Ollama,
     Auto,
+}
+
+/// 单个日志源的分析结果
+#[derive(Debug, Clone)]
+pub struct SourceAnalysis {
+    /// 源名称（文件名）
+    pub name: String,
+    /// 文件路径
+    pub path: PathBuf,
+    /// 解析出的日志条目
+    pub entries: Vec<LogEntry>,
+    /// 聚合分析摘要
+    pub summary: AnalysisSummary,
+    /// 检测到的格式
+    pub format: Format,
+}
+
+/// 跨源关联
+#[derive(Debug, Clone)]
+pub struct Correlation {
+    /// 源 A 的名称
+    pub source_a: String,
+    /// 源 B 的名称
+    pub source_b: String,
+    /// 关联强度 0.0–1.0
+    pub score: f32,
+    /// 关联原因描述
+    pub description: String,
+}
+
+/// 多源分析结果
+#[derive(Debug, Clone)]
+pub struct MultiSourceSummary {
+    /// 各源分析
+    pub sources: Vec<SourceAnalysis>,
+    /// 跨源关联
+    pub correlations: Vec<Correlation>,
+}
+
+impl MultiSourceSummary {
+    pub fn total_errors(&self) -> usize {
+        self.sources
+            .iter()
+            .map(|s| {
+                s.summary
+                    .level_distribution
+                    .get(&Level::Error)
+                    .unwrap_or(&0)
+            })
+            .sum()
+    }
+
+    pub fn total_lines(&self) -> usize {
+        self.sources.iter().map(|s| s.summary.total_lines).sum()
+    }
 }

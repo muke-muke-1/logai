@@ -16,7 +16,7 @@ fn test_analyze_help() {
     cmd.arg("analyze").arg("--help");
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Log file path"));
+        .stdout(predicate::str::contains("日志文件路径"));
 }
 
 #[test]
@@ -25,7 +25,7 @@ fn test_analyze_file_not_found() {
     cmd.arg("analyze").arg("nonexistent.log");
     cmd.assert()
         .failure()
-        .stderr(predicate::str::contains("File not found"));
+        .stderr(predicate::str::contains("文件不存在"));
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn test_analyze_with_min_level_flag() {
         .arg("deepseek");
     let output = cmd.output().unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Parsed") || stderr.contains("parse"));
+    assert!(stderr.contains("已解析") || stderr.contains("解析") || stderr.contains("parse"));
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn test_analyze_with_format_flag() {
         .arg("deepseek");
     let output = cmd.output().unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("Parsed") || stderr.contains("parse"));
+    assert!(stderr.contains("已解析") || stderr.contains("解析") || stderr.contains("parse"));
 }
 
 #[test]
