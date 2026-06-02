@@ -24,35 +24,35 @@
 
 ## P2 — v0.3 子版本
 
-- [ ] **T4: analyze --tui 分析后自动打开 TUI** (人工 ~30min / CC ~10min)
+- [x] **T4: analyze --tui 分析后自动打开 TUI** (人工 ~30min / CC ~10min)
   - 一次解析共享数据，分析完直接进入 TUI 交互浏览
   - 文件: `src/cli.rs`, `src/tui.rs`
   - 验证: `cargo test integration_tests`
 
-- [ ] **T5: HTML 指定字体 + 亮/暗主题切换** (人工 ~1h / CC ~10min)
+- [x] **T5: HTML 指定字体 + 亮/暗主题切换** (人工 ~1h / CC ~10min)
   - 正文: Inter / Noto Sans SC, 代码: JetBrains Mono / Consolas
   - JS 主题切换按钮，与 TUI 主题视觉语言一致
   - 文件: `src/renderer_html.rs`
   - 验证: `cargo test html_tests`
 
-- [ ] **T6: 创建 DESIGN.md 初稿 + 统一颜色令牌** (人工 ~30min / CC ~10min)
+- [x] **T6: 创建 DESIGN.md 初稿 + 统一颜色令牌** (人工 ~30min / CC ~10min)
   - 颜色令牌: TUI ThemeColors ↔ HTML CSS 变量对齐
   - 记录字体选择、间距、命名约定
   - 文件: `DESIGN.md` (新建), `src/tui.rs`, `src/renderer_html.rs`
 
-- [ ] **T7: 终端宽度检测 + HTML 响应式** (人工 ~45min / CC ~10min)
+- [x] **T7: 终端宽度检测 + HTML 响应式** (人工 ~45min / CC ~10min)
   - crossterm::terminal::size() 动态宽度，< 80 列时简化输出
   - HTML: canvas 容器 100% 宽度，移动端单列
   - 文件: `src/tui.rs`, `src/renderer.rs`, `src/renderer_html.rs`
 
 ## P2 — v0.3 新功能
 
-- [ ] **T8: 自定义解析规则 CLI 标志 + 配置文件** (人工 ~2h / CC ~20min)
+- [x] **T8: 自定义解析规则 CLI 标志 + 配置文件** (人工 ~2h / CC ~20min)
   - `--parse-*` 标志覆盖快速场景, `logai.toml` 或 `--rules-file` 覆盖复用场景
   - 优先级: CLI 标志 > 配置文件 > 自动检测
   - 文件: `src/cli.rs`, `src/parser.rs`, `src/types.rs`
 
-- [ ] **T9: 多源关联分析 分源视图 + 关联面板** (人工 ~3h / CC ~30min)
+- [x] **T9: 多源关联分析 分源视图 + 关联面板** (人工 ~3h / CC ~30min)
   - TUI: Tab 键切换来源 (app.log/db.log/nginx.log)，详情面板显示跨源因果链
   - CLI: 每个源独立 section + 底部关联分析 section
   - 文件: `src/tui.rs`, `src/cli.rs`, `src/renderer.rs`

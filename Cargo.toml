@@ -1,6 +1,6 @@
 [package]
 name = "logai"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 description = "AI-powered log analysis CLI — pipe your logs, get root cause analysis"
 license = "MIT"
@@ -27,6 +27,7 @@ ratatui = "0.29"
 tui-textarea = "0.7"
 async-trait = "0.1"
 anyhow = "1"
+toml = "0.8"
 notify = "6"
 
 [dev-dependencies]
