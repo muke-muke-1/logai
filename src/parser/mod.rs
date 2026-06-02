@@ -84,10 +84,22 @@ fn parse_config_toml(content: &str) -> anyhow::Result<ParseConfig> {
         .ok_or_else(|| anyhow::anyhow!("缺少 [parse] 节"))?;
 
     Ok(ParseConfig {
-        timestamp_format: parse.get("timestamp_format").and_then(|v| v.as_str()).map(String::from),
-        level_field: parse.get("level_field").and_then(|v| v.as_str()).map(String::from),
-        message_field: parse.get("message_field").and_then(|v| v.as_str()).map(String::from),
-        level_pattern: parse.get("level_pattern").and_then(|v| v.as_str()).map(String::from),
+        timestamp_format: parse
+            .get("timestamp_format")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        level_field: parse
+            .get("level_field")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        message_field: parse
+            .get("message_field")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        level_pattern: parse
+            .get("level_pattern")
+            .and_then(|v| v.as_str())
+            .map(String::from),
         stack_trace_marker: parse
             .get("stack_trace_marker")
             .and_then(|v| v.as_str())

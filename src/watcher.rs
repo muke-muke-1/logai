@@ -101,9 +101,12 @@ pub async fn watch_file(args: WatchArgs) -> anyhow::Result<()> {
         backend.model_name(),
         backend.actual_model(deep)
     );
-    let response = with_retry(|| backend.analyze(&summary), |n, e| {
-        eprintln!("   ⚠️  第 {n} 次尝试失败: {e}，重试中...");
-    })
+    let response = with_retry(
+        || backend.analyze(&summary),
+        |n, e| {
+            eprintln!("   ⚠️  第 {n} 次尝试失败: {e}，重试中...");
+        },
+    )
     .await?;
     render_report(&summary, &response, 0.0, backend.model_name());
 

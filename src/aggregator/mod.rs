@@ -3,7 +3,9 @@ pub mod bucketer;
 pub mod signature;
 pub mod token_budget;
 
-use crate::types::{AnalysisSummary, Anomaly, Correlation, ErrorGroup, Level, LogEntry, SourceAnalysis};
+use crate::types::{
+    AnalysisSummary, Anomaly, Correlation, ErrorGroup, Level, LogEntry, SourceAnalysis,
+};
 use std::collections::HashMap;
 
 /// Full aggregation pipeline: LogEntry list → AnalysisSummary

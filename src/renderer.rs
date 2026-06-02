@@ -36,8 +36,11 @@ fn print_header(summary: &AnalysisSummary, elapsed: f64, narrow: bool) {
         };
         println!(
             "{}",
-            format!("{} 行 · {} · {:.1}s", summary.total_lines, time_info, elapsed)
-                .with(Color::DarkBlue)
+            format!(
+                "{} 行 · {} · {:.1}s",
+                summary.total_lines, time_info, elapsed
+            )
+            .with(Color::DarkBlue)
         );
     } else {
         println!(
@@ -74,8 +77,16 @@ fn print_overview(summary: &AnalysisSummary, narrow: bool) {
     let error_rate = *error_count as f64 / total * 100.0;
     let warn_rate = *warn_count as f64 / total * 100.0;
 
-    let error_bar = if narrow { String::new() } else { "█".repeat((error_rate / 2.0) as usize) };
-    let warn_bar = if narrow { String::new() } else { "█".repeat((warn_rate / 2.0) as usize) };
+    let error_bar = if narrow {
+        String::new()
+    } else {
+        "█".repeat((error_rate / 2.0) as usize)
+    };
+    let warn_bar = if narrow {
+        String::new()
+    } else {
+        "█".repeat((warn_rate / 2.0) as usize)
+    };
 
     println!();
     if narrow {
@@ -192,8 +203,7 @@ fn print_fix_suggestions(suggestions: &[FixSuggestion], narrow: bool) {
     let box_w: usize = if narrow { 36 } else { 54 };
     println!(
         "{}",
-        format!("┌─ 🛠️ 修复建议 {}┐", "─".repeat(box_w.saturating_sub(14)))
-            .with(Color::DarkGrey)
+        format!("┌─ 🛠️ 修复建议 {}┐", "─".repeat(box_w.saturating_sub(14))).with(Color::DarkGrey)
     );
     println!();
     for (i, fix) in suggestions.iter().enumerate() {
@@ -255,20 +265,14 @@ pub fn render_multi_source(
     } else {
         println!(
             "{}",
-            format!(
-                "╔══ {} ══╗",
-                "═".repeat(width.saturating_sub(20) as usize)
-            )
-            .with(Color::DarkBlue)
+            format!("╔══ {} ══╗", "═".repeat(width.saturating_sub(20) as usize))
+                .with(Color::DarkBlue)
         );
         println!("{}", format!("║  {}  ║", header).with(Color::DarkBlue));
         println!(
             "{}",
-            format!(
-                "╚══{}══╝",
-                "═".repeat(width.saturating_sub(20) as usize)
-            )
-            .with(Color::DarkBlue)
+            format!("╚══{}══╝", "═".repeat(width.saturating_sub(20) as usize))
+                .with(Color::DarkBlue)
         );
     }
 

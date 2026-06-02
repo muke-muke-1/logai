@@ -425,9 +425,12 @@ pub async fn run() -> anyhow::Result<()> {
                     backend.model_name(),
                     backend.actual_model(deep)
                 );
-                let response = crate::ai::with_retry(|| backend.analyze(&first.summary), |n, e| {
-                    eprintln!("   ⚠️  第 {n} 次尝试失败: {e}，重试中...");
-                })
+                let response = crate::ai::with_retry(
+                    || backend.analyze(&first.summary),
+                    |n, e| {
+                        eprintln!("   ⚠️  第 {n} 次尝试失败: {e}，重试中...");
+                    },
+                )
                 .await?;
 
                 let elapsed = start.elapsed().as_secs_f64();

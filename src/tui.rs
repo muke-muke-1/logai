@@ -2,8 +2,8 @@ use crate::aggregator::aggregate;
 use crate::ai::{create_backend, with_retry};
 use crate::parser::{detect_format, parse_lines, parse_log_file};
 use crate::types::{
-    AnalysisSummary, Anomaly, ErrorGroup, Format, LogEntry, Model,
-    MultiSourceSummary, SourceAnalysis,
+    AnalysisSummary, Anomaly, ErrorGroup, Format, LogEntry, Model, MultiSourceSummary,
+    SourceAnalysis,
 };
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -259,11 +259,7 @@ pub fn run_interactive_with_data(
             let result = tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
                     let backend = create_backend(app.model, app.deep).await?;
-                    with_retry(
-                        || backend.chat(&prompt),
-                        |_n, _e| {},
-                    )
-                    .await
+                    with_retry(|| backend.chat(&prompt), |_n, _e| {}).await
                 })
             });
 
@@ -706,7 +702,11 @@ fn render_group_list_multi(
             } else {
                 Style::default().fg(colors.warn)
             };
-            let anomaly_icon = if has_anomaly(idx, anomalies) { "⚠ " } else { "" };
+            let anomaly_icon = if has_anomaly(idx, anomalies) {
+                "⚠ "
+            } else {
+                ""
+            };
 
             let line = Line::from(vec![
                 Span::styled(
@@ -893,12 +893,7 @@ fn render_detail_panel_multi(f: &mut Frame, area: Rect, app: &AppStateMulti, col
     f.render_widget(p, area);
 }
 
-fn render_correlation_panel(
-    f: &mut Frame,
-    area: Rect,
-    app: &AppStateMulti,
-    colors: &ThemeColors,
-) {
+fn render_correlation_panel(f: &mut Frame, area: Rect, app: &AppStateMulti, colors: &ThemeColors) {
     let correlations = &app.multi.correlations;
     let mut lines = vec![Line::from(vec![Span::styled(
         "🔗 跨源关联分析",
@@ -986,7 +981,10 @@ fn render_status_bar_multi(
 
     let status = Line::from(vec![
         Span::styled(
-            format!("{} {}分组/{}异常", source_str, groups_count, anomalies_count),
+            format!(
+                "{} {}分组/{}异常",
+                source_str, groups_count, anomalies_count
+            ),
             Style::default().fg(colors.fg),
         ),
         Span::styled(search_str, Style::default().fg(colors.highlight)),
@@ -1499,7 +1497,13 @@ fn render_ui(f: &mut Frame, app: &AppState) {
     }
 }
 
-fn render_group_list(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeColors, narrow: bool) {
+fn render_group_list(
+    f: &mut Frame,
+    area: Rect,
+    app: &AppState,
+    colors: &ThemeColors,
+    narrow: bool,
+) {
     let filtered = app.filtered_groups();
     let truncate_width = if narrow {
         area.width.saturating_sub(16) as usize
@@ -1619,12 +1623,10 @@ fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &Theme
     let mut lines = vec![];
 
     // 1. Error signature — most important, prominent
-    lines.push(Line::from(vec![
-        Span::styled(
-            &g.signature,
-            Style::default().fg(colors.error).bold(),
-        ),
-    ]));
+    lines.push(Line::from(vec![Span::styled(
+        &g.signature,
+        Style::default().fg(colors.error).bold(),
+    )]));
     lines.push(Line::from(""));
 
     // 2. Compact metadata: count + time + trend in one visual block
@@ -1712,7 +1714,13 @@ fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &Theme
     f.render_widget(p, area);
 }
 
-fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeColors, narrow: bool) {
+fn render_status_bar(
+    f: &mut Frame,
+    area: Rect,
+    app: &AppState,
+    colors: &ThemeColors,
+    narrow: bool,
+) {
     let mode_str = if app.live_mode { "实时" } else { "静态" };
     let theme_str = match app.theme {
         Theme::Dark => " 暗色",
