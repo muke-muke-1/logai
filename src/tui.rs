@@ -694,15 +694,15 @@ fn render_detail_panel(f: &mut Frame, area: Rect, app: &AppState, colors: &Theme
 }
 
 fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeColors) {
-    let mode_str = if app.live_mode { "LIVE" } else { "STATIC" };
+    let mode_str = if app.live_mode { "实时" } else { "静态" };
     let theme_str = match app.theme {
-        Theme::Dark => " Dark",
-        Theme::Light => " Light",
+        Theme::Dark => " 暗色",
+        Theme::Light => " 亮色",
     };
     let search_str = if app.search_query.is_empty() {
         String::new()
     } else {
-        format!("Search: \"{}\"  ", app.search_query)
+        format!("搜索: \"{}\"  ", app.search_query)
     };
 
     let status = Line::from(vec![
@@ -710,7 +710,7 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
         Span::styled(" | ", Style::default().fg(colors.border)),
         Span::styled(
             format!(
-                "{} groups / {} anomalies",
+                "{} 个分组 / {} 个异常",
                 app.groups.len(),
                 app.summary.anomalies.len()
             ),
@@ -720,7 +720,7 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
         Span::styled(search_str, Style::default().fg(colors.highlight)),
         Span::styled(theme_str, Style::default().fg(colors.info)),
         Span::styled(
-            "  j/k down/up  / search  t theme  a ask-ai  ? help  q quit",
+            "  j/k 移动  / 搜索  t 主题  a AI问答  ? 帮助  q 退出",
             Style::default().fg(colors.border),
         ),
     ]);
@@ -734,44 +734,45 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &AppState, colors: &ThemeCo
 fn render_help_popup(f: &mut Frame, _app: &AppState, colors: &ThemeColors) {
     let help_text = vec![
         Line::from(vec![Span::styled(
-            "Keyboard Shortcuts",
+            "按键说明",
             Style::default().fg(colors.highlight).bold(),
         )]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  j / Down   ", Style::default().fg(colors.highlight)),
-            Span::styled("Move down", Style::default().fg(colors.fg)),
+            Span::styled("  j / ↓       ", Style::default().fg(colors.highlight)),
+            Span::styled("向下移动", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  k / Up     ", Style::default().fg(colors.highlight)),
-            Span::styled("Move up", Style::default().fg(colors.fg)),
+            Span::styled("  k / ↑       ", Style::default().fg(colors.highlight)),
+            Span::styled("向上移动", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  /          ", Style::default().fg(colors.highlight)),
-            Span::styled("Search filter groups", Style::default().fg(colors.fg)),
+            Span::styled("  /           ", Style::default().fg(colors.highlight)),
+            Span::styled("搜索过滤分组", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  Backspace  ", Style::default().fg(colors.highlight)),
-            Span::styled("Delete last search char", Style::default().fg(colors.fg)),
+            Span::styled("  Backspace   ", Style::default().fg(colors.highlight)),
+            Span::styled("删除搜索字符", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  t          ", Style::default().fg(colors.highlight)),
-            Span::styled("Toggle dark/light theme", Style::default().fg(colors.fg)),
+            Span::styled("  t           ", Style::default().fg(colors.highlight)),
+            Span::styled("切换暗色/亮色主题", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  a          ", Style::default().fg(colors.highlight)),
-            Span::styled(
-                "Ask AI about selected error",
-                Style::default().fg(colors.fg),
-            ),
+            Span::styled("  Enter       ", Style::default().fg(colors.highlight)),
+            Span::styled("展开/折叠堆栈跟踪", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  ?          ", Style::default().fg(colors.highlight)),
-            Span::styled("Show/hide this help", Style::default().fg(colors.fg)),
+            Span::styled("  a           ", Style::default().fg(colors.highlight)),
+            Span::styled("向 AI 追问选中错误", Style::default().fg(colors.fg)),
         ]),
         Line::from(vec![
-            Span::styled("  q / Esc    ", Style::default().fg(colors.highlight)),
-            Span::styled("Quit", Style::default().fg(colors.fg)),
+            Span::styled("  ?           ", Style::default().fg(colors.highlight)),
+            Span::styled("显示/隐藏帮助", Style::default().fg(colors.fg)),
+        ]),
+        Line::from(vec![
+            Span::styled("  q / Esc     ", Style::default().fg(colors.highlight)),
+            Span::styled("退出", Style::default().fg(colors.fg)),
         ]),
     ];
 
@@ -782,7 +783,7 @@ fn render_help_popup(f: &mut Frame, _app: &AppState, colors: &ThemeColors) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(colors.highlight))
-                .title(" Help ")
+                .title(" 帮助 ")
                 .style(Style::default().bg(colors.selected)),
         ),
         popup_area,
