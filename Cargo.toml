@@ -1,6 +1,6 @@
 [package]
 name = "logai"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "AI-powered log analysis CLI — pipe your logs, get root cause analysis"
 license = "MIT"
@@ -16,6 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
