@@ -57,8 +57,53 @@
   - CLI: 每个源独立 section + 底部关联分析 section
   - 文件: `src/tui.rs`, `src/cli.rs`, `src/renderer.rs`
 
-## NOT in scope (留给 v0.4+)
+## v0.4 — DX POLISH (来源: /plan-devex-review 2026-06-03)
+
+> DX 评分: 5.3/10 → 目标 7.5/10 · TTHW: ~3min → 目标 < 1min
+
+### P1 — v0.4 必须交付
+
+- [ ] **T10: --dry-run + --sample + logai init** (人工 ~2h / CC ~15min)
+  - `--dry-run`: 解析 + 聚合 + 打印摘要，跳过 AI 调用
+  - `--sample`: 内置示例日志，无需 API key 即可演示
+  - `logai init`: 在当前目录生成 `logai.toml` 模板
+  - 文件: `src/cli.rs`
+  - 验证: `cargo test`, `logai analyze --dry-run tests/fixtures/json_error.log`
+
+- [ ] **T11: Shell 补全 + 统一中文 help + 默认 TUI** (人工 ~1.5h / CC ~15min)
+  - `logai completion bash|zsh|fish` 子命令 (clap_complete)
+  - 所有 help 文本统一为中文
+  - `logai app.log`（无子命令）默认打开 TUI
+  - 文件: `src/cli.rs`, `src/main.rs`, `Cargo.toml`
+  - 验证: `cargo test`, `logai completion bash`
+
+- [ ] **T12: 结构化错误类型 + 错误码 + 修复提示** (人工 ~2h / CC ~15min)
+  - ErrorCode 枚举: E001 文件不存在, E002 解析错误+行号, E003 缺少 API key+列出提供商, E004 AI调用失败+检查网络/限流
+  - API key 错误自动检测已设置的 key 并建议缺失的
+  - 文件: `src/errors.rs` (新建), `src/cli.rs`, `src/ai/mod.rs`, `src/parser/mod.rs`
+  - 验证: `cargo test`, 手动触发每种错误
+
+### P2 — v0.4 子版本
+
+- [ ] **T13: CONTRIBUTING.md + CI badge + issue 模板 + UPGRADE.md** (人工 ~1.5h / CC ~15min)
+  - CONTRIBUTING.md: 构建、测试、PR 流程
+  - CI badge 加入 README
+  - `.github/ISSUE_TEMPLATE/` 的 bug_report 和 feature_request
+  - UPGRADE.md: v0.3→v0.4 迁移指南
+  - 文件: `CONTRIBUTING.md`, `UPGRADE.md`, `.github/ISSUE_TEMPLATE/*.md`, `README.md`
+
+- [ ] **T14: 多源 HTML 报告** (人工 ~1h / CC ~10min)
+  - 扩展 `render_report_html` 支持 `MultiSourceSummary`
+  - HTML 中分源 section + 关联面板
+  - 文件: `src/renderer_html.rs`, `src/cli.rs`
+  - 验证: `cargo test html_tests`
+
+## NOT in scope (留给 v0.5+)
 
 - AI 缓存降级 (需要设计缓存失效策略)
 - TUI AI 调用异步化 (需要重构事件循环)
 - 完整的跨平台 CI/CD (GitHub Actions release + Homebrew 自动更新)
+- `logai ci` CI/CD 集成 (v0.5: GitHub Actions 模板)
+- `logai diff` 差异分析 (v0.5: 基线 vs 当前对比)
+- Linux 包 (.deb/.rpm) 和 Windows 安装器 (.msi)
+- DX 遥测/分析 (需要隐私优先设计)
