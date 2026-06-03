@@ -1,6 +1,7 @@
 pub mod aggregator;
 pub mod ai;
 pub mod cli;
+pub mod errors;
 pub mod parser;
 pub mod renderer;
 pub mod renderer_html;

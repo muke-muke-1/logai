@@ -4,6 +4,7 @@ pub mod ollama;
 pub mod openai;
 pub mod prompt;
 
+use crate::errors::LogaiError;
 use crate::types::{AiResponse, AnalysisSummary, Model};
 use async_trait::async_trait;
 use std::env;
@@ -55,25 +56,18 @@ where
 pub async fn create_backend(model: Model, deep: bool) -> anyhow::Result<Box<dyn AiBackend>> {
     match model {
         Model::Claude => {
-            let api_key = env::var("ANTHROPIC_API_KEY").map_err(|_| {
-                anyhow::anyhow!(
-                    "ANTHROPIC_API_KEY not set. Set it with: export ANTHROPIC_API_KEY=sk-ant-..."
-                )
-            })?;
+            let api_key = env::var("ANTHROPIC_API_KEY")
+                .map_err(|_| LogaiError::missing_api_key("Claude", "ANTHROPIC_API_KEY"))?;
             Ok(Box::new(claude::ClaudeBackend::new(api_key, deep)))
         }
         Model::OpenAI => {
-            let api_key = env::var("OPENAI_API_KEY").map_err(|_| {
-                anyhow::anyhow!("OPENAI_API_KEY not set. Set it with: export OPENAI_API_KEY=sk-...")
-            })?;
+            let api_key = env::var("OPENAI_API_KEY")
+                .map_err(|_| LogaiError::missing_api_key("OpenAI", "OPENAI_API_KEY"))?;
             Ok(Box::new(openai::OpenAiBackend::new(api_key, deep)))
         }
         Model::DeepSeek => {
-            let api_key = env::var("DEEPSEEK_API_KEY").map_err(|_| {
-                anyhow::anyhow!(
-                    "DEEPSEEK_API_KEY not set. Set it with: export DEEPSEEK_API_KEY=sk-..."
-                )
-            })?;
+            let api_key = env::var("DEEPSEEK_API_KEY")
+                .map_err(|_| LogaiError::missing_api_key("DeepSeek", "DEEPSEEK_API_KEY"))?;
             Ok(Box::new(deepseek::DeepSeekBackend::new(api_key, deep)))
         }
         Model::Ollama => {
@@ -110,13 +104,7 @@ async fn auto_detect(deep: bool) -> anyhow::Result<Box<dyn AiBackend>> {
         eprintln!("Auto-detected: Ollama ({})", host);
         return create_backend(Model::Ollama, deep).await;
     }
-    Err(anyhow::anyhow!(
-        "No AI backend available. Set one of:\n  \
-         ANTHROPIC_API_KEY (Claude)\n  \
-         OPENAI_API_KEY (OpenAI)\n  \
-         DEEPSEEK_API_KEY (DeepSeek)\n  \
-         Or start Ollama: ollama serve"
-    ))
+    Err(LogaiError::missing_api_key("auto-detect", "任何 AI 后端").into())
 }
 
 /// Parse AI response JSON with graceful degradation
