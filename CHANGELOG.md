@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0] - 2026-06-03
+
+### Added
+- `--dry-run` mode: parse + aggregate without AI (no API key needed)
+- `--sample` flag: analyze built-in demo log for instant first experience
+- `logai init`: generate `logai.toml` config template in current directory
+- `logai completion <shell>`: shell completion scripts (bash, zsh, fish)
+- Structured error codes (E001-E006) with remediation hints
+- Auto-detect available API keys in error messages
+- `logai <file>` (no subcommand) defaults to interactive TUI
+- Multi-source HTML reports with per-source sections + correlation panel
+- CONTRIBUTING.md, UPGRADE.md, GitHub issue templates
+
+### Changed
+- All CLI help text unified to Chinese
+- Missing API key errors now list all available backend options
+- New dependency: `clap_complete` for shell completions
+
 ## [0.3.0] - 2026-06-02
 
 ### Added

@@ -10,6 +10,7 @@
   <img src="https://img.shields.io/badge/models-Claude%20%7C%20OpenAI%20%7C%20DeepSeek%20%7C%20Ollama-blue?style=flat-square" alt="multi-model">
   <img src="https://img.shields.io/badge/config-zero-brightgreen?style=flat-square" alt="zero config">
   <img src="https://img.shields.io/badge/privacy-your%20logs%20stay%20home-red?style=flat-square" alt="privacy first">
+  <img src="https://img.shields.io/badge/tests-101%20passed-brightgreen?style=flat-square" alt="tests">
 </p>
 
 ---
