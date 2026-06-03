@@ -571,6 +571,244 @@ fn render_error_groups_html(groups: &[ErrorGroup]) -> String {
         .join("\n")
 }
 
+/// Generate a multi-source HTML analysis report with per-source sections and correlation panel
+pub fn render_report_html_multi(
+    multi: &crate::types::MultiSourceSummary,
+    response: Option<&AiResponse>,
+    elapsed_secs: f64,
+    model_name: &str,
+) -> String {
+    let title = "logai 多源分析报告";
+    let total_lines = multi.total_lines();
+    let total_errors = multi.total_errors();
+
+    let sources_html: String = multi
+        .sources
+        .iter()
+        .map(|source| {
+            let error_count = source
+                .summary
+                .level_distribution
+                .get(&Level::Error)
+                .unwrap_or(&0);
+            let warn_count = source
+                .summary
+                .level_distribution
+                .get(&Level::Warn)
+                .unwrap_or(&0);
+            let groups_html = render_error_groups_html(&source.summary.error_groups);
+            format!(
+                r#"<h2>📁 {name}</h2>
+<div class="meta">{lines} 行 · ERROR: {errors} · WARN: {warns} · {groups} 分组 · {anomalies} 异常</div>
+<div class="groups-container">{groups_html}</div>"#,
+                name = escape_html(&source.name),
+                lines = source.summary.total_lines,
+                errors = error_count,
+                warns = warn_count,
+                groups = source.summary.error_groups.len(),
+                anomalies = source.summary.anomalies.len(),
+                groups_html = groups_html,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    // Correlation panel
+    let correlations_html = if multi.correlations.is_empty() {
+        "<p>未检测到显著的跨源关联</p>".to_string()
+    } else {
+        multi
+            .correlations
+            .iter()
+            .map(|c| {
+                let score_pct = (c.score * 100.0) as u32;
+                let score_color = if c.score > 0.7 {
+                    "#e94560"
+                } else if c.score > 0.4 {
+                    "#f0a500"
+                } else {
+                    "#16c79a"
+                };
+                format!(
+                    r#"<div class="correlation">
+<span style="color:{score_color};font-weight:bold;">{score}%</span>
+<span>{a} ↔ {b}</span>
+<p style="color:var(--color-muted);font-size:13px;">{desc}</p>
+</div>"#,
+                    score = score_pct,
+                    score_color = score_color,
+                    a = escape_html(&c.source_a),
+                    b = escape_html(&c.source_b),
+                    desc = escape_html(&c.description),
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    let root_causes_html = if let Some(resp) = response {
+        render_root_causes_html(&resp.root_causes)
+    } else {
+        "<p>—</p>".to_string()
+    };
+    let fix_suggestions_html = if let Some(resp) = response {
+        render_fix_suggestions_html(&resp.fix_suggestions)
+    } else {
+        "<p>—</p>".to_string()
+    };
+
+    // Build Chart.js data from first source only
+    let chart_data = if let Some(first) = multi.sources.first() {
+        build_chart_data(&first.summary)
+    } else {
+        String::new()
+    };
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=Noto+Sans+SC:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root {{
+    --color-bg: #1a1a2e; --color-fg: #e0e0e0; --color-highlight: #00bcd4;
+    --color-error: #e94560; --color-warn: #f0a500; --color-info: #16c79a;
+    --color-selected: #16213e; --color-border: #0f3460; --color-code-bg: #0d1b3e;
+    --color-muted: #888; --shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }}
+  [data-theme="light"] {{
+    --color-bg: #fafafa; --color-fg: #1a1a2e; --color-highlight: #1565c0;
+    --color-error: #c62828; --color-warn: #e65100; --color-info: #2e7d32;
+    --color-selected: #e8eaf6; --color-border: #c5cae9; --color-code-bg: #eceff1;
+    --color-muted: #666; --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }}
+  *, *::before, *::after {{ box-sizing: border-box; }}
+  body {{
+    font-family: 'Inter', 'Noto Sans SC', sans-serif; max-width: 960px;
+    margin: 0 auto; padding: 24px; background: var(--color-bg); color: var(--color-fg);
+    transition: background 0.3s, color 0.3s;
+  }}
+  h1 {{ color: var(--color-error); border-bottom: 2px solid var(--color-border); padding-bottom: 12px; }}
+  h2 {{ color: var(--color-info); margin-top: 32px; }}
+  .meta {{ color: var(--color-muted); font-size: 14px; margin-bottom: 24px; }}
+  .theme-toggle {{
+    position: fixed; top: 16px; right: 24px; z-index: 100;
+    background: var(--color-selected); color: var(--color-fg);
+    border: 1px solid var(--color-border); border-radius: 20px;
+    padding: 6px 14px; cursor: pointer; font-size: 13px; font-family: inherit;
+  }}
+  .theme-toggle:hover {{ filter: brightness(1.1); }}
+  .overview {{ display: flex; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }}
+  .stat {{ background: var(--color-selected); border-radius: 8px; padding: 16px 24px; text-align: center; }}
+  .stat .value {{ font-size: 28px; font-weight: bold; color: var(--color-error); }}
+  .stat .label {{ font-size: 12px; color: var(--color-muted); margin-top: 4px; }}
+  .charts {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }}
+  .charts .wide {{ grid-column: 1 / -1; }}
+  .chart-box {{ background: var(--color-selected); border-radius: 8px; padding: 16px; }}
+  .chart-box h3 {{ color: var(--color-muted); font-size: 13px; margin: 0 0 12px 0; }}
+  .chart-box canvas {{ max-height: 280px; }}
+  .root-cause {{ background: var(--color-selected); border-left: 4px solid var(--color-error); padding: 16px; margin-bottom: 16px; border-radius: 0 8px 8px 0; }}
+  .fix {{ background: var(--color-selected); border-left: 4px solid var(--color-info); padding: 16px; margin-bottom: 12px; border-radius: 0 8px 8px 0; }}
+  .fix code {{ background: var(--color-code-bg); padding: 8px 12px; display: block; margin-top: 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }}
+  .group {{ background: var(--color-selected); padding: 12px 16px; margin-bottom: 8px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }}
+  .group .sig {{ font-family: 'JetBrains Mono', monospace; font-size: 13px; }}
+  .group .count {{ color: var(--color-error); font-weight: bold; }}
+  .correlation {{ background: var(--color-selected); padding: 12px 16px; margin-bottom: 8px; border-radius: 8px; border-left: 4px solid var(--color-warn); }}
+  .footer {{ color: var(--color-muted); font-size: 12px; margin-top: 48px; border-top: 1px solid var(--color-border); padding-top: 16px; text-align: center; }}
+  .severity {{ font-size: 12px; padding: 2px 8px; border-radius: 4px; }}
+  .severity.critical {{ background: var(--color-error); color: white; }}
+  .severity.high {{ background: color-mix(in srgb, var(--color-error) 70%, transparent); color: white; }}
+  .severity.medium {{ background: var(--color-warn); color: #1a1a2e; }}
+  .severity.low {{ background: var(--color-info); color: #1a1a2e; }}
+  @media (max-width: 900px) {{ .charts {{ grid-template-columns: 1fr; }} }}
+  @media (max-width: 700px) {{ body {{ padding: 12px; }} .overview {{ gap: 12px; }} .stat {{ padding: 12px 16px; }} }}
+</style>
+</head>
+<body data-theme="dark">
+<button class="theme-toggle" onclick="toggleTheme()">🌓 主题</button>
+
+<h1>📊 {title}</h1>
+<div class="meta">{total_lines} 行 · {total_errors} 错误 · {sources} 个文件 · 耗时 {elapsed:.1}s · AI: {model}</div>
+
+<h2>📋 概览</h2>
+<div class="overview">
+  <div class="stat"><div class="value">{sources_count}</div><div class="label">日志文件</div></div>
+  <div class="stat"><div class="value">{total_errors}</div><div class="label">错误总数</div></div>
+  <div class="stat"><div class="value">{total_lines}</div><div class="label">日志行数</div></div>
+  <div class="stat"><div class="value">{elapsed:.1}s</div><div class="label">耗时</div></div>
+</div>
+
+<h2>📈 交互图表（首个文件）</h2>
+<div class="charts">
+  <div class="chart-box wide"><h3>错误趋势（时间线）</h3><canvas id="timelineChart"></canvas></div>
+  <div class="chart-box"><h3>日志级别分布</h3><canvas id="levelPieChart"></canvas></div>
+  <div class="chart-box"><h3>TOP 错误分组</h3><canvas id="groupsBarChart"></canvas></div>
+</div>
+
+<h2>🔗 跨源关联</h2>
+{correlations_html}
+
+{sources_html}
+
+<h2>🔴 根因分析</h2>
+{root_causes_html}
+
+<h2>🛠️ 修复建议</h2>
+{fix_suggestions_html}
+
+<div class="footer">由 logai 生成 · 日志数据未上传 · 仅 AI 看到聚合统计</div>
+
+<script>
+function toggleTheme() {{
+  const el = document.documentElement;
+  const current = el.getAttribute('data-theme');
+  const next = current === 'light' ? 'dark' : 'light';
+  el.setAttribute('data-theme', next);
+  updateChartColors(next);
+}}
+function getChartColors(theme) {{
+  const style = getComputedStyle(document.documentElement);
+  return {{ grid: theme === 'light' ? '#ddd' : '#2a2a4e', text: style.getPropertyValue('--color-muted').trim() || '#888' }};
+}}
+let charts = {{}};
+function updateChartColors(theme) {{
+  const c = getChartColors(theme);
+  Object.values(charts).forEach(ch => {{
+    if (ch.options && ch.options.scales) {{
+      if (ch.options.scales.x) {{ ch.options.scales.x.grid = {{ color: c.grid }}; ch.options.scales.x.ticks = {{ color: c.text }}; }}
+      if (ch.options.scales.y) {{ ch.options.scales.y.grid = {{ color: c.grid }}; ch.options.scales.y.ticks = {{ color: c.text }}; }}
+    }}
+    if (ch.options && ch.options.plugins && ch.options.plugins.legend) {{
+      ch.options.plugins.legend.labels = {{ color: c.text }};
+    }}
+    ch.update();
+  }});
+}}
+{chart_data}
+</script>
+</body>
+</html>"#,
+        title = title,
+        total_lines = total_lines,
+        total_errors = total_errors,
+        sources = multi.sources.len(),
+        sources_count = multi.sources.len(),
+        elapsed = elapsed_secs,
+        model = model_name,
+        correlations_html = correlations_html,
+        sources_html = sources_html,
+        root_causes_html = root_causes_html,
+        fix_suggestions_html = fix_suggestions_html,
+        chart_data = chart_data,
+    )
+}
+
 fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
