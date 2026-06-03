@@ -7,7 +7,7 @@ fn test_cli_help() {
     cmd.arg("--help");
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("AI-powered log analysis"));
+        .stdout(predicate::str::contains("AI 驱动的日志分析 CLI"));
 }
 
 #[test]
